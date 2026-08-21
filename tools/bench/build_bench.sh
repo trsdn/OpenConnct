@@ -51,7 +51,7 @@ cat > build/bridge.h <<'HEADER'
 #include <OpenConnectDSP/oc_gate.h>
 #include <OpenConnectDSP/oc_compressor.h>
 #include <OpenConnectDSP/oc_exciter.h>
-#include <OpenConnectDSP/oc_big_bottom.h>
+#include <OpenConnectDSP/oc_bass_enhancer.h>
 HEADER
 
 swiftc -O \

@@ -62,7 +62,7 @@ struct ExciterSettings: Codable, Equatable {
     var drive: Float = 0.5
 }
 
-struct BigBottomSettings: Codable, Equatable {
+struct BassEnhancerSettings: Codable, Equatable {
     var amount: Float = 0.35
     var frequency: Float = 100
     var drive: Float = 0.5
@@ -86,12 +86,12 @@ struct ChannelSettings: Codable, Equatable, Identifiable {
     var gateEnabled: Bool = false
     var compressorEnabled: Bool = false
     var exciterEnabled: Bool = false
-    var bigBottomEnabled: Bool = false
+    var bassEnhancerEnabled: Bool = false
 
     var gate = GateSettings()
     var compressor = CompressorSettings()
     var exciter = ExciterSettings()
-    var bigBottom = BigBottomSettings()
+    var bassEnhancer = BassEnhancerSettings()
 
     var faderDB: Float = 0
     var muted: Bool = false
@@ -102,6 +102,90 @@ struct ChannelSettings: Codable, Equatable, Identifiable {
     init(deviceUID: String, deviceName: String) {
         self.deviceUID = deviceUID
         self.deviceName = deviceName
+    }
+
+    // MARK: Decoding
+
+    // Hand-written rather than synthesised, for two reasons.
+    //
+    // Every field is optional-with-default. `SettingsStore.load()` decodes the
+    // whole file as one dictionary with `try?`, so a single unreadable channel
+    // does not fail that channel — it discards every setting for every
+    // microphone, silently. The synthesised decoder throws on any missing key,
+    // which means simply adding a field in a future version would have wiped
+    // the user's file on first launch. It never should have been synthesised.
+    //
+    // And it maps the pre-rename key names. The bass stage used to be called
+    // after a term that turns out to be a live trademark, so the property was
+    // renamed; the name survives here only long enough to read files written
+    // before that, which are then saved back under the new key.
+
+    private enum CodingKeys: String, CodingKey {
+        case deviceUID, deviceName
+        case gainDB, padEnabled, padDB
+        case hpfMode, hpfFrequency
+        case gateEnabled, compressorEnabled, exciterEnabled, bassEnhancerEnabled
+        case gate, compressor, exciter, bassEnhancer
+        case faderDB, muted, soloed
+        case legacyBassEnhancerEnabled = "bigBottomEnabled"
+        case legacyBassEnhancer = "bigBottom"
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        deviceUID = try c.decode(String.self, forKey: .deviceUID)
+        deviceName = try c.decodeIfPresent(String.self, forKey: .deviceName) ?? deviceUID
+
+        gainDB = try c.decodeIfPresent(Float.self, forKey: .gainDB) ?? 0
+        padEnabled = try c.decodeIfPresent(Bool.self, forKey: .padEnabled) ?? false
+        padDB = try c.decodeIfPresent(Float.self, forKey: .padDB) ?? -20
+
+        hpfMode = try c.decodeIfPresent(HPFMode.self, forKey: .hpfMode) ?? .off
+        hpfFrequency = try c.decodeIfPresent(Float.self, forKey: .hpfFrequency) ?? 100
+
+        gateEnabled = try c.decodeIfPresent(Bool.self, forKey: .gateEnabled) ?? false
+        compressorEnabled = try c.decodeIfPresent(Bool.self, forKey: .compressorEnabled) ?? false
+        exciterEnabled = try c.decodeIfPresent(Bool.self, forKey: .exciterEnabled) ?? false
+        bassEnhancerEnabled =
+            try c.decodeIfPresent(Bool.self, forKey: .bassEnhancerEnabled)
+            ?? c.decodeIfPresent(Bool.self, forKey: .legacyBassEnhancerEnabled)
+            ?? false
+
+        gate = try c.decodeIfPresent(GateSettings.self, forKey: .gate) ?? GateSettings()
+        compressor = try c.decodeIfPresent(CompressorSettings.self, forKey: .compressor)
+            ?? CompressorSettings()
+        exciter = try c.decodeIfPresent(ExciterSettings.self, forKey: .exciter) ?? ExciterSettings()
+        bassEnhancer =
+            try c.decodeIfPresent(BassEnhancerSettings.self, forKey: .bassEnhancer)
+            ?? c.decodeIfPresent(BassEnhancerSettings.self, forKey: .legacyBassEnhancer)
+            ?? BassEnhancerSettings()
+
+        faderDB = try c.decodeIfPresent(Float.self, forKey: .faderDB) ?? 0
+        muted = try c.decodeIfPresent(Bool.self, forKey: .muted) ?? false
+        soloed = try c.decodeIfPresent(Bool.self, forKey: .soloed) ?? false
+    }
+
+    // Written by hand too, so the legacy keys are read but never written back.
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(deviceUID, forKey: .deviceUID)
+        try c.encode(deviceName, forKey: .deviceName)
+        try c.encode(gainDB, forKey: .gainDB)
+        try c.encode(padEnabled, forKey: .padEnabled)
+        try c.encode(padDB, forKey: .padDB)
+        try c.encode(hpfMode, forKey: .hpfMode)
+        try c.encode(hpfFrequency, forKey: .hpfFrequency)
+        try c.encode(gateEnabled, forKey: .gateEnabled)
+        try c.encode(compressorEnabled, forKey: .compressorEnabled)
+        try c.encode(exciterEnabled, forKey: .exciterEnabled)
+        try c.encode(bassEnhancerEnabled, forKey: .bassEnhancerEnabled)
+        try c.encode(gate, forKey: .gate)
+        try c.encode(compressor, forKey: .compressor)
+        try c.encode(exciter, forKey: .exciter)
+        try c.encode(bassEnhancer, forKey: .bassEnhancer)
+        try c.encode(faderDB, forKey: .faderDB)
+        try c.encode(muted, forKey: .muted)
+        try c.encode(soloed, forKey: .soloed)
     }
 }
 

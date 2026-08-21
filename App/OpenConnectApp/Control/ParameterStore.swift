@@ -181,10 +181,10 @@ final class ParameterStore: ObservableObject {
         send(.exciterFrequency, channel: channel, s.exciter.frequency)
         send(.exciterDrive, channel: channel, s.exciter.drive)
 
-        send(.bigBottomEnabled, channel: channel, s.bigBottomEnabled ? 1 : 0)
-        send(.bigBottomAmount, channel: channel, s.bigBottom.amount)
-        send(.bigBottomFrequency, channel: channel, s.bigBottom.frequency)
-        send(.bigBottomDrive, channel: channel, s.bigBottom.drive)
+        send(.bassEnhancerEnabled, channel: channel, s.bassEnhancerEnabled ? 1 : 0)
+        send(.bassEnhancerAmount, channel: channel, s.bassEnhancer.amount)
+        send(.bassEnhancerFrequency, channel: channel, s.bassEnhancer.frequency)
+        send(.bassEnhancerDrive, channel: channel, s.bassEnhancer.drive)
 
         send(.faderDB, channel: channel, s.faderDB)
         send(.effectivelyMuted, channel: channel, isEffectivelyMuted(s) ? 1 : 0)
@@ -218,10 +218,10 @@ final class ParameterStore: ObservableObject {
         if a.exciter.frequency != b.exciter.frequency { send(.exciterFrequency, channel: c, b.exciter.frequency) }
         if a.exciter.drive != b.exciter.drive { send(.exciterDrive, channel: c, b.exciter.drive) }
 
-        if a.bigBottomEnabled != b.bigBottomEnabled { send(.bigBottomEnabled, channel: c, b.bigBottomEnabled ? 1 : 0) }
-        if a.bigBottom.amount != b.bigBottom.amount { send(.bigBottomAmount, channel: c, b.bigBottom.amount) }
-        if a.bigBottom.frequency != b.bigBottom.frequency { send(.bigBottomFrequency, channel: c, b.bigBottom.frequency) }
-        if a.bigBottom.drive != b.bigBottom.drive { send(.bigBottomDrive, channel: c, b.bigBottom.drive) }
+        if a.bassEnhancerEnabled != b.bassEnhancerEnabled { send(.bassEnhancerEnabled, channel: c, b.bassEnhancerEnabled ? 1 : 0) }
+        if a.bassEnhancer.amount != b.bassEnhancer.amount { send(.bassEnhancerAmount, channel: c, b.bassEnhancer.amount) }
+        if a.bassEnhancer.frequency != b.bassEnhancer.frequency { send(.bassEnhancerFrequency, channel: c, b.bassEnhancer.frequency) }
+        if a.bassEnhancer.drive != b.bassEnhancer.drive { send(.bassEnhancerDrive, channel: c, b.bassEnhancer.drive) }
 
         if a.faderDB != b.faderDB { send(.faderDB, channel: c, b.faderDB) }
     }

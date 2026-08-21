@@ -11,9 +11,10 @@
 extern "C" {
 #endif
 
-/* APHEX-style aural exciter, following US4150253A: split off a high-passed
-   side-chain, drive it into a single-sided soft clipper (the patent's diode,
-   which yields both odd and even harmonics), then blend the result back.
+/* Harmonic exciter, following the method of the (long expired) US4150253A:
+   split off a high-passed side-chain, drive it into a single-sided soft
+   clipper (the patent's diode, which yields both odd and even harmonics),
+   then blend the result back.
 
    The side-chain is normalised by its own envelope before the clipper. A static
    nonlinearity fed a raw mic signal sits in its linear region at speech level

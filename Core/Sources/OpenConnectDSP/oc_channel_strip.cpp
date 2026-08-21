@@ -20,12 +20,12 @@ void oc_channel_strip_init(oc_channel_strip *strip, oc_sample_rate sr)
     strip->bypass_gate = 1;
     strip->bypass_compressor = 1;
     strip->bypass_exciter = 1;
-    strip->bypass_big_bottom = 1;
+    strip->bypass_bass_enhancer = 1;
 
     oc_gate_init(&strip->gate, sr);
     oc_compressor_init(&strip->compressor, sr);
     oc_exciter_init(&strip->exciter, sr);
-    oc_big_bottom_init(&strip->big_bottom, sr);
+    oc_bass_enhancer_init(&strip->bass_enhancer, sr);
     oc_meter_init(&strip->input_meter, sr, 300.0f);
     oc_meter_init(&strip->output_meter, sr, 300.0f);
 }
@@ -62,12 +62,12 @@ void oc_channel_strip_set_bypasses(
     int gate,
     int compressor,
     int exciter,
-    int big_bottom)
+    int bass_enhancer)
 {
     strip->bypass_gate = gate;
     strip->bypass_compressor = compressor;
     strip->bypass_exciter = exciter;
-    strip->bypass_big_bottom = big_bottom;
+    strip->bypass_bass_enhancer = bass_enhancer;
 }
 
 void oc_channel_strip_process(oc_channel_strip *strip, const oc_float *in, oc_float *out, uint32_t n_frames)
@@ -78,7 +78,7 @@ void oc_channel_strip_process(oc_channel_strip *strip, const oc_float *in, oc_fl
         && strip->bypass_gate
         && strip->bypass_compressor
         && strip->bypass_exciter
-        && strip->bypass_big_bottom;
+        && strip->bypass_bass_enhancer;
 
     if (all_bypassed
         && oc_smoothed_param_is_settled(&strip->pad_gain)
@@ -110,8 +110,8 @@ void oc_channel_strip_process(oc_channel_strip *strip, const oc_float *in, oc_fl
             sample = oc_exciter_process_sample(&strip->exciter, sample);
         }
 
-        if (!strip->bypass_big_bottom) {
-            sample = oc_big_bottom_process_sample(&strip->big_bottom, sample);
+        if (!strip->bypass_bass_enhancer) {
+            sample = oc_bass_enhancer_process_sample(&strip->bass_enhancer, sample);
         }
 
         out[i] = sample;

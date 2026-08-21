@@ -167,7 +167,7 @@ func percentile(_ sorted: [Float], _ p: Double) -> Float {
 }
 
 /// Energy in three broad bands as a fraction of the total. Coarse on purpose:
-/// the question is only ever "did the exciter add top" or "did Big Bottom add
+/// the question is only ever "did the exciter add top" or "did Bass Enhancer add
 /// weight", and a third-octave analysis would bury that in detail.
 func bandEnergy(_ a: Audio) -> (sub: Double, low: Double, mid: Double, high: Double) {
     let log2n = vDSP_Length(11)
@@ -207,7 +207,7 @@ func bandEnergy(_ a: Audio) -> (sub: Double, low: Double, mid: Double, high: Dou
     guard windows > 0 else { return (0, 0, 0, 0) }
 
     let binHz = a.sampleRate / Double(n)
-    // Big Bottom works below ~150 Hz, so a 250 Hz "low" band is too coarse to
+    // Bass Enhancer works below ~150 Hz, so a 250 Hz "low" band is too coarse to
     // see it at all. The sub band is reported separately for that reason.
     var sub = 0.0, low = 0.0, mid = 0.0, high = 0.0
     for k in 1..<(n / 2) {
@@ -284,7 +284,7 @@ struct StripConfig {
     var gate: (threshold: Float, attack: Float, hold: Float, release: Float, hysteresis: Float, range: Float)?
     var comp: (threshold: Float, ratio: Float, attack: Float, release: Float, makeup: Float, knee: Float)?
     var exciter: (amount: Float, frequency: Float, drive: Float)?
-    var bigBottom: (amount: Float, frequency: Float, drive: Float)?
+    var bassEnhancer: (amount: Float, frequency: Float, drive: Float)?
 }
 
 /// Runs the audio through the real strip in 128-frame blocks — the same size the
@@ -301,7 +301,7 @@ func render(_ input: Audio, _ cfg: StripConfig) -> (audio: Audio, trace: Dynamic
                                   cfg.gate == nil ? 1 : 0,
                                   cfg.comp == nil ? 1 : 0,
                                   cfg.exciter == nil ? 1 : 0,
-                                  cfg.bigBottom == nil ? 1 : 0)
+                                  cfg.bassEnhancer == nil ? 1 : 0)
     if let g = cfg.gate {
         oc_gate_configure(&strip.gate, g.threshold, g.attack, g.hold, g.release, g.hysteresis, g.range)
     }
@@ -310,7 +310,7 @@ func render(_ input: Audio, _ cfg: StripConfig) -> (audio: Audio, trace: Dynamic
                                 c.release, c.makeup, c.knee, OC_DETECTOR_RMS)
     }
     if let e = cfg.exciter { oc_exciter_configure(&strip.exciter, e.amount, e.frequency, e.drive) }
-    if let b = cfg.bigBottom { oc_big_bottom_configure(&strip.big_bottom, b.amount, b.frequency, b.drive) }
+    if let b = cfg.bassEnhancer { oc_bass_enhancer_configure(&strip.bass_enhancer, b.amount, b.frequency, b.drive) }
 
     var out = [Float](repeating: 0, count: input.samples.count)
     var trace = DynamicsTrace()
@@ -368,7 +368,7 @@ func printTrace(_ cfg: StripConfig, _ t: DynamicsTrace) {
 
 /// Harmonic distortion of a single stage, measured on a pure tone.
 ///
-/// This is the measurement that decides whether the exciter and Big Bottom are
+/// This is the measurement that decides whether the exciter and Bass Enhancer are
 /// doing what their names claim. Both are built around `tanh`, and `tanh(u)` is
 /// very nearly `u` for small `u` — so a saturator fed a quiet signal produces no
 /// harmonics at all and degenerates into a plain shelving EQ. Feeding a tone at
@@ -573,7 +573,7 @@ func usage() -> Never {
 
       list
       capture <seconds> <out.wav> [--device <name substring>]
-      render  <in.wav> <out.wav> [--gate] [--comp] [--exciter] [--bigbottom]
+      render  <in.wav> <out.wav> [--gate] [--comp] [--exciter] [--bassenh]
                                  [--hpf 75|150] [--gain <dB>]
       measure <file.wav> [more.wav ...]
       suite   <in.wav> <outdir>     render every stage separately and compare
@@ -597,7 +597,7 @@ let defaults = StripConfig(
     gate: (threshold: -45, attack: 2, hold: 100, release: 200, hysteresis: 6, range: -60),
     comp: (threshold: -18, ratio: 3, attack: 10, release: 120, makeup: 0, knee: 6),
     exciter: (amount: 0.35, frequency: 3500, drive: 0.5),
-    bigBottom: (amount: 0.35, frequency: 100, drive: 0.5))
+    bassEnhancer: (amount: 0.35, frequency: 100, drive: 0.5))
 
 do {
     switch command {
@@ -634,7 +634,7 @@ do {
         if flag("gate") { cfg.gate = defaults.gate }
         if flag("comp") { cfg.comp = defaults.comp }
         if flag("exciter") { cfg.exciter = defaults.exciter }
-        if flag("bigbottom") { cfg.bigBottom = defaults.bigBottom }
+        if flag("bassenh") { cfg.bassEnhancer = defaults.bassEnhancer }
         if let g = value("gain"), let v = Float(g) { cfg.gain = v }
         if value("hpf") == "75" { cfg.hpf = OC_HPF_75 }
         if value("hpf") == "150" { cfg.hpf = OC_HPF_150 }
@@ -659,12 +659,12 @@ do {
         var gate = StripConfig(); gate.gate = defaults.gate
         var comp = StripConfig(); comp.comp = defaults.comp
         var exc = StripConfig(); exc.exciter = defaults.exciter
-        var big = StripConfig(); big.bigBottom = defaults.bigBottom
+        var big = StripConfig(); big.bassEnhancer = defaults.bassEnhancer
         var full = defaults; full.hpf = OC_HPF_75
 
         let stages: [(String, StripConfig)] = [
             ("00-dry", StripConfig()), ("01-hpf75", hpf), ("02-gate", gate),
-            ("03-compressor", comp), ("04-exciter", exc), ("05-bigbottom", big),
+            ("03-compressor", comp), ("04-exciter", exc), ("05-bassenhancer", big),
             ("06-full-chain", full),
         ]
 
@@ -686,11 +686,11 @@ do {
         // at normal speaking levels.
         let levels: [Double] = [-40, -30, -20, -12, -6, -3]
         for (name, hz, make) in [
-            ("Aural Exciter", 5000.0, { (a: Float) -> StripConfig in
+            ("Exciter", 5000.0, { (a: Float) -> StripConfig in
                 var c = StripConfig(); c.exciter = (amount: a, frequency: 3500, drive: 0.5); return c
             }),
-            ("Big Bottom", 100.0, { (a: Float) -> StripConfig in
-                var c = StripConfig(); c.bigBottom = (amount: a, frequency: 120, drive: 0.5); return c
+            ("Bass Enhancer", 100.0, { (a: Float) -> StripConfig in
+                var c = StripConfig(); c.bassEnhancer = (amount: a, frequency: 120, drive: 0.5); return c
             }),
         ] {
             print("\n\(name) — \(Int(hz)) Hz tone, default amount 0.35 vs maximum 1.0")

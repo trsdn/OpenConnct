@@ -90,8 +90,8 @@ make uninstall-driver
    | **High-Pass Filter** | Off / 75 Hz / 150 Hz / Variable (continuous frequency) |
    | **Noise Gate** | Threshold, attack, hold, release, hysteresis |
    | **Compressor** | Threshold, ratio, attack, release, makeup gain, knee (RMS detector) |
-   | **Aural Exciter** | Amount, frequency, drive |
-   | **Big Bottom** | Amount, frequency, drive |
+   | **Exciter** | Amount, frequency, drive |
+   | **Bass Enhancer** | Amount, frequency, drive |
    | **Fader** | Post-DSP level, ramped per block so moves are inaudible as steps |
    | **Mute / Solo** | Solo is cross-channel; soloing one mic silences all others |
 
@@ -219,8 +219,8 @@ OpenConnect/
 │       ├── oc_biquad.cpp           Second-order IIR (HPF implementation)
 │       ├── oc_gate.cpp             Noise gate
 │       ├── oc_compressor.cpp       Feed-forward compressor (RMS detector)
-│       ├── oc_exciter.cpp          Aural exciter
-│       ├── oc_big_bottom.cpp       Big Bottom bass enhancer
+│       ├── oc_exciter.cpp          Harmonic exciter
+│       ├── oc_bass_enhancer.cpp       Bass Enhancer bass enhancer
 │       ├── oc_resampler.cpp        Fractional resampler (linear interpolation)
 │       ├── oc_drift_controller.cpp PI controller with anti-windup + slew limiter
 │       ├── oc_ring_buffer.cpp      Lock-free SPSC ring (power-of-two, sample-indexed)
@@ -282,7 +282,7 @@ The test suite (`Core/Tests/OpenConnectDSPTests/`) tests every module in `Core/S
 
 - Biquad HPF: −3 dB at 75 Hz and 150 Hz cutoffs, unity passband, >10 dB roll-off one octave below cutoff, numerical stability on 10 s of white noise.
 - Smoothed parameter: bounded per-sample delta, convergence, settled state.
-- Noise gate, compressor, exciter, Big Bottom, ring buffer, resampler, drift controller (see the test file for the full list).
+- Noise gate, compressor, exciter, Bass Enhancer, ring buffer, resampler, drift controller (see the test file for the full list).
 
 > **Note:** the test target `Platform` constraint in `Core/Package.swift` is `.macOS(.v14)`, so `make test` requires macOS 14 Sonoma or later.
 
@@ -409,6 +409,23 @@ macOS requires explicit microphone permission for any app that captures audio. O
 - **Hardware gain/pad/HPF control over RØDE's proprietary USB HID protocol** is explicitly out of scope for v1. The `App/OpenConnectApp/Hardware/` directory is a stub. In v1, Gain, Pad, and HPF are all implemented in software DSP. A future phase may add RØDE HID control to reduce headroom loss before the ADC.
 - **More than 8 simultaneous channels.** The current limit is `kMaxChannels = 8`, which is adequate for the reference hardware. Increasing it is a reallocation-only change.
 - **Per-source stereo panning and multi-bus routing.** "OpenConnect Mic" is a **stereo** device (2 channels, 48 kHz, Float32) because that is what conferencing and streaming apps expect. Both mics are mono sources, so the mix is summed and written identically to the left and right channels — a centre image on a stereo device. Panning individual mics, or exposing each mic as its own output bus, is not planned.
+
+---
+
+## Trademarks
+
+OpenConnect is an independent project. It is **not affiliated with, endorsed by, sponsored by or licensed by** RØDE Microphones, Freedman Electronics Pty Ltd, Aphex, or any of their subsidiaries.
+
+Two of the processing stages here are the same *class* of effect that RØDE Connect provides under Aphex branding. The techniques are free to implement — the relevant patents (US 4,150,253 for harmonic excitation, US 5,359,659 for low-frequency enhancement) have long expired. The **names**, however, have not:
+
+| Term | Status | Owner |
+|---|---|---|
+| AURAL EXCITER | Live US registration 7046645, registered 9 May 2023 | Freedman Electronics Pty Ltd (RØDE's parent) |
+| BIG BOTTOM | Live US registration 1786623, renewed 2 February 2024 | DWC-Aphex, LLC |
+
+Both marks cover Class 9 audio signal processing, which is exactly this software. So neither is used as a feature name here. The equivalent stages are called **Exciter** and **Bass Enhancer**, following the generic vocabulary already used by Logic Pro, iZotope, Calf and LSP. Where the marks appear above, they are used only to identify the products of their respective owners.
+
+RØDE, RØDE Connect, NT-USB Mini and VideoMic are trademarks of Freedman Electronics Pty Ltd, referred to here only to describe the hardware this software supports and the application it replaces.
 
 ---
 

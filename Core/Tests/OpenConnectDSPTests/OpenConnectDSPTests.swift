@@ -352,25 +352,25 @@ final class OpenConnectDSPTests: XCTestCase {
         return out
     }
 
-    func testBigBottomAddsLowBandEnergy() {
+    func testBassEnhancerAddsLowBandEnergy() {
         let input = zip(
             SignalGenerator.sine(frequency: 80, sampleRate: sr, count: 48_000, amplitude: 0.12),
             SignalGenerator.sine(frequency: 2_000, sampleRate: sr, count: 48_000, amplitude: 0.12)
         ).map(+)
-        let dry = processBigBottom(input, amount: 0, drive: 2)
-        let wet = processBigBottom(input, amount: 0.8, drive: 2)
+        let dry = processBassEnhancer(input, amount: 0, drive: 2)
+        let wet = processBassEnhancer(input, amount: 0.8, drive: 2)
         XCTAssertGreaterThan(Analysis.binMagnitude(wet, frequency: 80, sampleRate: sr), Analysis.binMagnitude(dry, frequency: 80, sampleRate: sr))
     }
 
-    /// The defining property of Big Bottom: the low band is lifted more when it
+    /// The defining property of Bass Enhancer: the low band is lifted more when it
     /// is quiet than when it is loud, so weight is added without the peak
     /// meter moving. The original tanh saturator had no level dependence at
     /// all -- it was a fixed, and at speech level inaudible, shelf.
-    func testBigBottomLiftsQuietBassMoreThanLoudBass() {
+    func testBassEnhancerLiftsQuietBassMoreThanLoudBass() {
         func lift(amplitude: Float) -> Float {
             let input = SignalGenerator.sine(frequency: 80, sampleRate: sr, count: 96_000, amplitude: amplitude)
-            let dry = processBigBottom(input, amount: 0, drive: 0.5)
-            let wet = processBigBottom(input, amount: 1.0, drive: 0.5)
+            let dry = processBassEnhancer(input, amount: 0, drive: 0.5)
+            let wet = processBassEnhancer(input, amount: 1.0, drive: 0.5)
             let tail = 48_000..<96_000
             let dryMag = Analysis.binMagnitude(Array(dry[tail]), frequency: 80, sampleRate: sr)
             let wetMag = Analysis.binMagnitude(Array(wet[tail]), frequency: 80, sampleRate: sr)
@@ -385,33 +385,33 @@ final class OpenConnectDSPTests: XCTestCase {
         XCTAssertLessThan(loud, quiet)
     }
 
-    func testBigBottomLeavesHighBandMostlyUnchanged() {
+    func testBassEnhancerLeavesHighBandMostlyUnchanged() {
         let input = zip(
             SignalGenerator.sine(frequency: 80, sampleRate: sr, count: 48_000, amplitude: 0.12),
             SignalGenerator.sine(frequency: 2_000, sampleRate: sr, count: 48_000, amplitude: 0.12)
         ).map(+)
-        let dry = processBigBottom(input, amount: 0, drive: 2)
-        let wet = processBigBottom(input, amount: 0.8, drive: 2)
+        let dry = processBassEnhancer(input, amount: 0, drive: 2)
+        let wet = processBassEnhancer(input, amount: 0.8, drive: 2)
         XCTAssertEqual(
             Analysis.binMagnitude(wet, frequency: 2_000, sampleRate: sr),
             Analysis.binMagnitude(dry, frequency: 2_000, sampleRate: sr),
             accuracy: 0.01)
     }
 
-    func testBigBottomZeroAmountIsDry() {
+    func testBassEnhancerZeroAmountIsDry() {
         let input = SignalGenerator.whiteNoise(count: 4_096, amplitude: 0.1)
-        let dry = processBigBottom(input, amount: 0, drive: 2)
+        let dry = processBassEnhancer(input, amount: 0, drive: 2)
         XCTAssertLessThan(zip(input, dry).map { abs($0 - $1) }.max()!, 1.0e-7)
     }
 
-    func processBigBottom(_ input: [Float], amount: Float, drive: Float) -> [Float] {
-        var b = oc_big_bottom()
-        oc_big_bottom_init(&b, Double(sr))
-        oc_big_bottom_configure(&b, amount, 200, drive)
+    func processBassEnhancer(_ input: [Float], amount: Float, drive: Float) -> [Float] {
+        var b = oc_bass_enhancer()
+        oc_bass_enhancer_init(&b, Double(sr))
+        oc_bass_enhancer_configure(&b, amount, 200, drive)
         var out = Array(repeating: Float(0), count: input.count)
         input.withUnsafeBufferPointer { ib in
             out.withUnsafeMutableBufferPointer { ob in
-                oc_big_bottom_process_block(&b, ib.baseAddress!, ob.baseAddress!, UInt32(input.count))
+                oc_bass_enhancer_process_block(&b, ib.baseAddress!, ob.baseAddress!, UInt32(input.count))
             }
         }
         return out

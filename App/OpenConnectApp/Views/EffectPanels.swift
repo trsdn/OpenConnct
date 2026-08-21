@@ -10,7 +10,7 @@ import SwiftUI
 // so exactly one set of parameters is on screen at a time.
 
 enum EffectKind: String, CaseIterable, Identifiable {
-    case gate, compressor, exciter, bigBottom
+    case gate, compressor, exciter, bassEnhancer
 
     var id: String { rawValue }
 
@@ -18,8 +18,8 @@ enum EffectKind: String, CaseIterable, Identifiable {
         switch self {
         case .gate:      return "Noise Gate"
         case .compressor: return "Compressor"
-        case .exciter:   return "Aural Exciter"
-        case .bigBottom: return "Big Bottom"
+        case .exciter:   return "Exciter"
+        case .bassEnhancer: return "Bass Enhancer"
         }
     }
 
@@ -28,7 +28,7 @@ enum EffectKind: String, CaseIterable, Identifiable {
         case .gate:       return "waveform.path"
         case .compressor: return "arrow.down.right.and.arrow.up.left"
         case .exciter:    return "sparkles"
-        case .bigBottom:  return "circle.bottomhalf.filled"
+        case .bassEnhancer:  return "circle.bottomhalf.filled"
         }
     }
 
@@ -37,7 +37,7 @@ enum EffectKind: String, CaseIterable, Identifiable {
         case .gate:       return \.gateEnabled
         case .compressor: return \.compressorEnabled
         case .exciter:    return \.exciterEnabled
-        case .bigBottom:  return \.bigBottomEnabled
+        case .bassEnhancer:  return \.bassEnhancerEnabled
         }
     }
 }
@@ -170,7 +170,7 @@ struct EffectParameters: View {
             case .gate:       gate
             case .compressor: compressor
             case .exciter:    exciter
-            case .bigBottom:  bigBottom
+            case .bassEnhancer:  bassEnhancer
             }
         }
     }
@@ -285,7 +285,7 @@ struct EffectParameters: View {
         )
     }
 
-    // MARK: Aural Exciter
+    // MARK: Exciter
 
     @ViewBuilder private var exciter: some View {
         ParamSliderRow(
@@ -314,29 +314,29 @@ struct EffectParameters: View {
         )
     }
 
-    // MARK: Big Bottom
+    // MARK: Bass Enhancer
 
-    @ViewBuilder private var bigBottom: some View {
+    @ViewBuilder private var bassEnhancer: some View {
         ParamSliderRow(
             "Amount",
-            value: bind(settings.bigBottom.amount, uid: uid, store: store,
-                        keyPath: \.bigBottom.amount),
+            value: bind(settings.bassEnhancer.amount, uid: uid, store: store,
+                        keyPath: \.bassEnhancer.amount),
             range: 0...1,
             format: { String(format: "%.0f %%", $0 * 100) },
             enabled: on
         )
         ParamSliderRow(
             "Frequency",
-            value: bind(settings.bigBottom.frequency, uid: uid, store: store,
-                        keyPath: \.bigBottom.frequency),
+            value: bind(settings.bassEnhancer.frequency, uid: uid, store: store,
+                        keyPath: \.bassEnhancer.frequency),
             range: 40...400,
             format: { formatHz($0) },
             enabled: on
         )
         ParamSliderRow(
             "Drive",
-            value: bind(settings.bigBottom.drive, uid: uid, store: store,
-                        keyPath: \.bigBottom.drive),
+            value: bind(settings.bassEnhancer.drive, uid: uid, store: store,
+                        keyPath: \.bassEnhancer.drive),
             range: 0...1,
             format: { String(format: "%.0f %%", $0 * 100) },
             enabled: on

@@ -4,11 +4,11 @@
  no heap allocation, locks, exceptions, RTTI, I/O, logging, or unbounded loops.
  All storage is caller-owned or fixed-size in POD structs.
 */
-#include "OpenConnectDSP/oc_big_bottom.h"
+#include "OpenConnectDSP/oc_bass_enhancer.h"
 #include "oc_internal.h"
 #include <Accelerate/Accelerate.h>
 
-void oc_big_bottom_init(oc_big_bottom *bottom, oc_sample_rate sr)
+void oc_bass_enhancer_init(oc_bass_enhancer *bottom, oc_sample_rate sr)
 {
     bottom->sr = sr;
     bottom->amount = 0.0f;
@@ -16,14 +16,14 @@ void oc_big_bottom_init(oc_big_bottom *bottom, oc_sample_rate sr)
     bottom->drive = 1.0f;
     bottom->env = 0.0f;
     bottom->gain_reduction_db = 0.0f;
-    bottom->attack_coeff = oc_coeff_for_ms(sr, OC_BIG_BOTTOM_ATTACK_MS);
-    bottom->release_coeff = oc_coeff_for_ms(sr, OC_BIG_BOTTOM_RELEASE_MS);
+    bottom->attack_coeff = oc_coeff_for_ms(sr, OC_BASS_ENHANCER_ATTACK_MS);
+    bottom->release_coeff = oc_coeff_for_ms(sr, OC_BASS_ENHANCER_RELEASE_MS);
     oc_biquad_init_identity(&bottom->lp_in);
     oc_biquad_init_identity(&bottom->lp_out);
-    oc_big_bottom_configure(bottom, 0.0f, 200.0f, 1.0f);
+    oc_bass_enhancer_configure(bottom, 0.0f, 200.0f, 1.0f);
 }
 
-void oc_big_bottom_configure(oc_big_bottom *bottom, oc_float amount, oc_float frequency, oc_float drive)
+void oc_bass_enhancer_configure(oc_bass_enhancer *bottom, oc_float amount, oc_float frequency, oc_float drive)
 {
     bottom->amount = oc_clampf(amount, 0.0f, 1.0f);
     bottom->frequency = frequency;
@@ -38,7 +38,7 @@ void oc_big_bottom_configure(oc_big_bottom *bottom, oc_float amount, oc_float fr
     bottom->ratio = 2.0f + 6.0f * bottom->drive;
 }
 
-oc_float oc_big_bottom_process_sample(oc_big_bottom *bottom, oc_float input)
+oc_float oc_bass_enhancer_process_sample(oc_bass_enhancer *bottom, oc_float input)
 {
     if (bottom->amount <= 0.0f) {
         bottom->gain_reduction_db = 0.0f;
@@ -62,7 +62,7 @@ oc_float oc_big_bottom_process_sample(oc_big_bottom *bottom, oc_float input)
     return input + bottom->amount * band;
 }
 
-void oc_big_bottom_process_block(oc_big_bottom *bottom, const oc_float *in, oc_float *out, uint32_t n)
+void oc_bass_enhancer_process_block(oc_bass_enhancer *bottom, const oc_float *in, oc_float *out, uint32_t n)
 {
     if (bottom->amount <= 0.0f) {
         if (out != in) {
@@ -85,7 +85,7 @@ void oc_big_bottom_process_block(oc_big_bottom *bottom, const oc_float *in, oc_f
 
         for (uint32_t i = 0; i < chunk; ++i) {
             oc_float dry = in[offset + i];
-            wet[i] = oc_big_bottom_process_sample(bottom, dry) - dry;
+            wet[i] = oc_bass_enhancer_process_sample(bottom, dry) - dry;
         }
 
         vDSP_vadd(wet, 1, in + offset, 1, out + offset, 1, chunk);
@@ -93,7 +93,7 @@ void oc_big_bottom_process_block(oc_big_bottom *bottom, const oc_float *in, oc_f
     }
 }
 
-oc_float oc_big_bottom_gain_reduction_db(const oc_big_bottom *bottom)
+oc_float oc_bass_enhancer_gain_reduction_db(const oc_bass_enhancer *bottom)
 {
     return bottom->gain_reduction_db;
 }

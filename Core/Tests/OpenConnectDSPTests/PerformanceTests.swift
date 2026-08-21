@@ -21,7 +21,7 @@ private func configureBenchmarkStrip(_ strip: inout oc_channel_strip, bypassed: 
         oc_gate_configure(&strip.gate, -60, 2, 80, 150, 6, -60)
         oc_compressor_configure(&strip.compressor, -18, 3, 10, 120, 0, 6, OC_DETECTOR_RMS)
         oc_exciter_configure(&strip.exciter, 0.35, 3_500, 0.5)
-        oc_big_bottom_configure(&strip.big_bottom, 0.35, 120, 0.5)
+        oc_bass_enhancer_configure(&strip.bass_enhancer, 0.35, 120, 0.5)
         oc_channel_strip_set_bypasses(&strip, 0, 0, 0, 0)
     }
 }

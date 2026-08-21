@@ -359,17 +359,17 @@ func rtApplyParam(_ channel: UnsafeMutablePointer<ChannelRT>, _ paramID: UInt32,
         let e = channel.pointee.params
         oc_exciter_configure(&p.pointee.exciter, e.exciterAmount, e.exciterFrequency, e.exciterDrive)
 
-    case OCParam.bigBottomAmount.rawValue...OCParam.bigBottomDrive.rawValue:
+    case OCParam.bassEnhancerAmount.rawValue...OCParam.bassEnhancerDrive.rawValue:
         switch selector {
-        case OCParam.bigBottomAmount.rawValue: channel.pointee.params.bottomAmount = value
-        case OCParam.bigBottomFrequency.rawValue: channel.pointee.params.bottomFrequency = value
+        case OCParam.bassEnhancerAmount.rawValue: channel.pointee.params.bottomAmount = value
+        case OCParam.bassEnhancerFrequency.rawValue: channel.pointee.params.bottomFrequency = value
         default: channel.pointee.params.bottomDrive = value
         }
         let b = channel.pointee.params
-        oc_big_bottom_configure(&p.pointee.big_bottom, b.bottomAmount, b.bottomFrequency, b.bottomDrive)
+        oc_bass_enhancer_configure(&p.pointee.bass_enhancer, b.bottomAmount, b.bottomFrequency, b.bottomDrive)
 
     case OCParam.gateEnabled.rawValue, OCParam.compressorEnabled.rawValue,
-         OCParam.exciterEnabled.rawValue, OCParam.bigBottomEnabled.rawValue:
+         OCParam.exciterEnabled.rawValue, OCParam.bassEnhancerEnabled.rawValue:
         switch selector {
         case OCParam.gateEnabled.rawValue: channel.pointee.params.gateEnabled = value
         case OCParam.compressorEnabled.rawValue: channel.pointee.params.compEnabled = value

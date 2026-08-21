@@ -7,7 +7,7 @@
 #include "OpenConnectDSP/oc_gate.h"
 #include "OpenConnectDSP/oc_compressor.h"
 #include "OpenConnectDSP/oc_exciter.h"
-#include "OpenConnectDSP/oc_big_bottom.h"
+#include "OpenConnectDSP/oc_bass_enhancer.h"
 #include "OpenConnectDSP/oc_meter.h"
 #include "OpenConnectDSP/oc_ring_buffer.h"
 #include "OpenConnectDSP/oc_resampler.h"

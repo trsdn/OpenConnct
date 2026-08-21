@@ -34,10 +34,10 @@ enum OCParam: UInt32 {
     case exciterFrequency = 32
     case exciterDrive = 33
 
-    case bigBottomEnabled = 40
-    case bigBottomAmount = 41
-    case bigBottomFrequency = 42
-    case bigBottomDrive = 43
+    case bassEnhancerEnabled = 40
+    case bassEnhancerAmount = 41
+    case bassEnhancerFrequency = 42
+    case bassEnhancerDrive = 43
 
     case faderDB = 50
     case muted = 51
