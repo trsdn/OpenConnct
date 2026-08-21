@@ -3,10 +3,11 @@ import Foundation
 /// Persists which input devices the user wants OpenConnect to use, keyed by
 /// CoreAudio device UID.
 ///
-/// Absence of a stored selection is meaningfully different from an empty one:
-/// on first launch we have no idea which of the machine's inputs are the user's
-/// microphones, so we bind them all and let them prune. Once the user has made
-/// a choice — including deselecting everything — we honour it exactly.
+/// Absence of a stored selection is meaningfully different from an empty one.
+/// On first launch nothing has been chosen, so `AudioEngine.selected(from:)`
+/// applies its default — every input except the built-in microphone. Once the
+/// user has made a choice, including deselecting everything, we honour it
+/// exactly and the default never applies again.
 struct DeviceSelectionStore {
     private let fileURL: URL
 

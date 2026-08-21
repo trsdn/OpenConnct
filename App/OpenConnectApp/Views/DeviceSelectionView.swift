@@ -46,7 +46,7 @@ struct DeviceSelectionView: View {
                 .font(Theme.titleFont)
                 .foregroundColor(Theme.textPrimary)
             Text(store.deviceSelectionIsImplicit
-                 ? "Every input is in use. Untick the ones you do not want."
+                 ? "Every microphone you plugged in is in use. The built-in one is left out by default — tick it if you want it."
                  : "Only ticked inputs are mixed into OpenConnect Mic.")
                 .font(Theme.captionFont)
                 .foregroundColor(Theme.textDisabled)

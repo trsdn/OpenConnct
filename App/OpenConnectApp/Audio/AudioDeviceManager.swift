@@ -32,6 +32,16 @@ struct AudioInputDevice: Equatable, Identifiable {
     /// True when the device is backed by real hardware we can reasonably treat
     /// as a microphone.
     var isPhysicalInput: Bool { !Self.softwareTransports.contains(transportType) }
+
+    /// The machine's own built-in microphone.
+    ///
+    /// It is a perfectly real input, so it stays selectable, but it is a poor
+    /// *default*: it is usually pointing at a keyboard and a fan, and anyone
+    /// who has plugged in a proper microphone did so in order to use that one
+    /// instead. Enabling it silently mixes room noise into the outgoing feed,
+    /// which is exactly the kind of thing nobody notices until someone on the
+    /// other end of a call mentions it.
+    var isBuiltIn: Bool { transportType == kAudioDeviceTransportTypeBuiltIn }
 }
 
 /// Enumerates input devices and reports hot-plug changes.

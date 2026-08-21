@@ -60,10 +60,20 @@ final class ParameterStore: ObservableObject {
             deviceSelectionIsImplicit = false
             enabledDeviceUIDs = stored
         } else {
-            // No explicit choice yet: everything is in use, and the UI reflects
-            // that by showing all boxes ticked.
+            // No explicit choice yet. Default to every input *except* the
+            // built-in microphone, provided something else is available —
+            // plugging in a microphone is a statement of intent, and quietly
+            // mixing the laptop's own microphone in alongside it adds room
+            // noise that nobody asked for and few would think to look for.
+            //
+            // If the built-in is all there is, use it: an app with no inputs
+            // at all would be worse than one with a mediocre input.
+            // Mirror the engine's default so the tick boxes show what is
+            // actually in use. Deliberately *not* persisted: writing it back
+            // would turn a default into an apparent user choice.
             deviceSelectionIsImplicit = true
-            enabledDeviceUIDs = Set(devices.map(\.uid))
+            let external = devices.filter { !$0.isBuiltIn }
+            enabledDeviceUIDs = Set((external.isEmpty ? devices : external).map(\.uid))
         }
     }
 

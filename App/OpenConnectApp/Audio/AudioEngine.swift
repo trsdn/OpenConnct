@@ -49,8 +49,7 @@ final class AudioEngine {
 
     // MARK: - Device selection
 
-    /// The UIDs the user has enabled. `nil` before they have ever chosen, which
-    /// means "everything", so a first launch still produces sound.
+    /// The UIDs the user has enabled, or `nil` before they have ever chosen.
     var enabledDeviceUIDs: Set<String>? { enabledUIDs }
 
     /// Replaces the selection and rebinds. Passing an empty set is legitimate —
@@ -62,8 +61,23 @@ final class AudioEngine {
     }
 
     /// Applies the user's selection to a raw device list.
+    ///
+    /// Before the user has chosen anything, the default is every input *except*
+    /// the built-in microphone. Plugging a microphone in is a statement of
+    /// intent, and quietly mixing the machine's own microphone in alongside it
+    /// adds keyboard and fan noise to the outgoing feed — the sort of fault
+    /// nobody notices until someone on the other end of a call mentions it.
+    /// If the built-in is the only input there is, it is used, because an app
+    /// with no inputs at all would be worse.
+    ///
+    /// This deliberately lives here rather than in the UI: it is a default, not
+    /// a choice, so it must not be written to disk as though the user had made
+    /// it. Ticking the box in Input Devices is what makes a selection explicit.
     private func selected(from devices: [AudioInputDevice]) -> [AudioInputDevice] {
-        guard let enabledUIDs else { return devices }
+        guard let enabledUIDs else {
+            let external = devices.filter { !$0.isBuiltIn }
+            return external.isEmpty ? devices : external
+        }
         return devices.filter { enabledUIDs.contains($0.uid) }
     }
 
