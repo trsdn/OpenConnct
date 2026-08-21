@@ -155,53 +155,6 @@ func verdictColour(_ verdict: MeterVerdict) -> Color {
     }
 }
 
-/// The summed output, shown beside the channel strips.
-///
-/// The channel meters answer "is this microphone set right?". This one answers
-/// "is what leaves the app set right?", which is the question the person at the
-/// other end of the call cares about and which no channel meter can answer once
-/// there is more than one microphone open.
-struct MasterLevelMeter: View {
-    @ObservedObject var source: ChannelMeterSource
-
-    var body: some View {
-        let peak = source.meters.postFaderPeakDB
-        let verdict = meterVerdict(peakDB: peak)
-        VStack(spacing: 6) {
-            Text("SUMME")
-                .font(Theme.captionFont)
-                .foregroundColor(Theme.textSecondary)
-
-            LiveLevelMeter(
-                source: source, tap: .postFader, orientation: .vertical,
-                showsScale: true)
-                .frame(width: 12)
-                .frame(maxHeight: .infinity)
-                .accessibilityHidden(true)
-
-            Text(peak > -120 ? String(format: "%.0f", peak) : "—")
-                .font(Theme.valueFont)
-                .monospacedDigit()
-                .foregroundColor(Theme.textPrimary)
-
-            Text(verdict.text)
-                .font(Theme.captionFont)
-                .foregroundColor(verdictColour(verdict))
-                .lineLimit(1)
-                .fixedSize(horizontal: true, vertical: false)
-        }
-        // Narrow on purpose: every point spent here is a point the channel
-        // strips do not get, and there are only four short words to fit.
-        .frame(width: 52)
-        .padding(.vertical, 8)
-        .background(Theme.panel)
-        .cornerRadius(Theme.radiusSmall)
-        .help("Der Pegel, den OpenConnect an Teams, Zoom oder OBS weitergibt. "
-              + "Der grün hinterlegte Bereich ist das Ziel: dort sollten die "
-              + "lautesten Stellen beim Sprechen landen.")
-    }
-}
-
 /// Input and output levels in the detail pane.
 ///
 /// "RAUS" is measured after the fader and mute, so every control the user can

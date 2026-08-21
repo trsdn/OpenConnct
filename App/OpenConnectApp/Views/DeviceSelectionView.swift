@@ -18,7 +18,7 @@ struct DeviceSelectionView: View {
             Divider().background(Theme.border)
 
             if store.availableDevices.isEmpty {
-                Text("No inputs detected.")
+                Text("Keine Mikrofone gefunden.")
                     .font(Theme.labelFont)
                     .foregroundColor(Theme.textSecondary)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -42,12 +42,12 @@ struct DeviceSelectionView: View {
 
     private var header: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text("Input Devices")
+            Text("Mikrofone")
                 .font(Theme.titleFont)
                 .foregroundColor(Theme.textPrimary)
             Text(store.deviceSelectionIsImplicit
-                 ? "Every microphone you plugged in is in use. The built-in one is left out by default — tick it if you want it."
-                 : "Only ticked inputs are mixed into OpenConnect Mic.")
+                 ? "Alle angesteckten Mikrofone sind in Benutzung. Das eingebaute bleibt außen vor — hak es an, wenn du es willst."
+                 : "Nur angehakte Geräte werden in OpenConnect Mic gemischt.")
                 .font(Theme.captionFont)
                 .foregroundColor(Theme.textDisabled)
                 .fixedSize(horizontal: false, vertical: true)
@@ -87,23 +87,28 @@ struct DeviceSelectionView: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel(Text(device.name))
-        .accessibilityValue(Text(enabled ? "In use" : "Not in use"))
+        .accessibilityValue(Text(enabled ? "In Benutzung" : "Nicht in Benutzung"))
         .accessibilityAddTraits(enabled ? .isSelected : [])
     }
 
     private func subtitle(for device: AudioInputDevice) -> String {
-        let channels = device.inputChannels == 1 ? "mono" : "\(device.inputChannels) ch"
+        let channels = device.inputChannels == 1 ? "mono" : "\(device.inputChannels) Kanäle"
         return String(format: "%@ · %.0f kHz", channels, device.nominalSampleRate / 1000)
     }
 
     private var footer: some View {
-        HStack {
-            Text("\(store.enabledDeviceUIDs.count) of \(store.availableDevices.count) in use")
+        // Counted against the devices actually on the list, not against the
+        // stored set. A selection made when some other interface was plugged in
+        // keeps that interface's UID, and counting those read "5 of 5 in use"
+        // beside a row that plainly said "not in use".
+        let inUse = store.availableDevices.filter { store.enabledDeviceUIDs.contains($0.uid) }.count
+        return HStack {
+            Text("\(inUse) von \(store.availableDevices.count) in Benutzung")
                 .font(Theme.captionFont)
                 .foregroundColor(Theme.textSecondary)
                 .monospacedDigit()
             Spacer()
-            Button("Done") { dismiss() }
+            Button("Fertig") { dismiss() }
                 .buttonStyle(.borderedProminent)
                 .tint(Theme.accent)
         }

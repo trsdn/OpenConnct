@@ -18,43 +18,49 @@ struct RootView: View {
     }
 
     var body: some View {
-        HSplitView {
-            // Left: mixer strips
-            MixerView(
+        VStack(spacing: 0) {
+            // Above the split, not inside the mixer column: what it shows —
+            // whether the app is working and what is leaving it — is true for
+            // the whole window, not for the left half of it.
+            HeaderBar(
                 store: store,
-                selectedUID: effectiveUID,
-                onSelectChannel: { uid in
-                    withAnimation(.easeInOut(duration: 0.18)) {
-                        selectedUID = uid
+                diagnosticsSource: store.meterHub.diagnostics,
+                masterSource: store.meterHub.master)
+            Divider().background(Theme.border)
+
+            HSplitView {
+                // Left: mixer strips
+                MixerView(
+                    store: store,
+                    selectedUID: effectiveUID,
+                    onSelectChannel: { uid in
+                        withAnimation(.easeInOut(duration: 0.18)) {
+                            selectedUID = uid
+                        }
+                    }
+                )
+                // Four 80pt strips need 368pt and the "add" tile another 64, so
+                // 432 shows a four-microphone setup complete with the slot for
+                // the fifth. Raised enough to show everything, and no further:
+                // this pane always takes its maximum, so every extra point here
+                // is taken from the detail pane.
+                .frame(minWidth: 160, idealWidth: 440, maxWidth: 440, maxHeight: .infinity)
+
+                // Right: detail pane or placeholder
+                Group {
+                    if let uid = effectiveUID,
+                       let settings = store.channels.first(where: { $0.deviceUID == uid }) {
+                        MicDetailView(
+                            settings: settings,
+                            connection: store.meterHub.connection(for: uid),
+                            meterSource: store.meterHub.meterSource(for: uid),
+                            store: store)
+                    } else {
+                        detailPlaceholder
                     }
                 }
-            )
-            // Four 80pt strips already needed 368pt, so the old 360pt ceiling
-            // clipped the last one; the summed meter beside them needs another
-            // 72. 440 is exactly those two together — raised enough to show
-            // everything, and no further, because this pane always takes its
-            // maximum and every extra point here widens the whole window.
-            // Four 80pt strips already needed 368pt, so the old 360pt ceiling
-            // clipped the last one; the summed meter beside them needs another
-            // 72. 440 is exactly those two together — raised enough to show
-            // everything, and no further, because this pane always takes its
-            // maximum and every extra point here is taken from the detail pane.
-            .frame(minWidth: 160, idealWidth: 440, maxWidth: 440, maxHeight: .infinity)
-
-            // Right: detail pane or placeholder
-            Group {
-                if let uid = effectiveUID,
-                   let settings = store.channels.first(where: { $0.deviceUID == uid }) {
-                    MicDetailView(
-                        settings: settings,
-                        connection: store.meterHub.connection(for: uid),
-                        meterSource: store.meterHub.meterSource(for: uid),
-                        store: store)
-                } else {
-                    detailPlaceholder
-                }
+                .frame(minWidth: 360, idealWidth: 440, maxWidth: .infinity, maxHeight: .infinity)
             }
-            .frame(minWidth: 360, idealWidth: 440, maxWidth: .infinity, maxHeight: .infinity)
         }
         .background(Theme.bg)
         .onChange(of: store.channels) { channels in

@@ -244,24 +244,32 @@ final class MeterNSView: NSView {
     ///
     /// This is the answer to "where is it supposed to be?". Without it the meter
     /// shows a quantity with no reference, which is why a user can watch it for
-    /// weeks and still not know whether they are aiming right. The band is drawn
-    /// on the track, not over the bar, so a correctly set level covers it — the
-    /// marks are guidance while you set up and disappear once you are there.
+    /// weeks and still not know whether they are aiming right.
+    ///
+    /// The band is a thin rail along one edge, not a filled block. Filling the
+    /// full thickness worked on an 8pt vertical bar and failed badly on a wide
+    /// horizontal one: a green rectangle a third of the meter long reads as
+    /// *level*, which is precisely the misreading these marks exist to prevent.
+    /// A rail cannot be mistaken for a bar. It still sits under the level, so a
+    /// correctly set signal covers it — guidance while you set up, gone once you
+    /// are there.
     private func drawScale(
         _ ctx: CGContext, length: CGFloat, thickness: CGFloat, vertical: Bool
     ) {
         let lowPos  = meterPosition(meterTargetLowDB) * length
         let highPos = meterPosition(meterTargetHighDB) * length
+        let rail = max(2, min(3, thickness / 3)).rounded()
         if highPos > lowPos {
-            ctx.setFillColor(NSColor(Theme.meterGreen.opacity(0.16)).cgColor)
+            ctx.setFillColor(NSColor(Theme.meterGreen.opacity(0.55)).cgColor)
             ctx.fill(vertical
-                ? CGRect(x: 0, y: lowPos, width: thickness, height: highPos - lowPos)
-                : CGRect(x: lowPos, y: 0, width: highPos - lowPos, height: thickness))
+                ? CGRect(x: 0, y: lowPos, width: rail, height: highPos - lowPos)
+                : CGRect(x: lowPos, y: 0, width: highPos - lowPos, height: rail))
         }
 
-        // One tick per labelled level. Rounded to whole pixels so they stay
-        // crisp and identical to each other at any size.
-        ctx.setFillColor(NSColor(Color(white: 1, opacity: 0.18)).cgColor)
+        // One tick per labelled level, spanning the full thickness so it reads
+        // as a scale mark rather than as part of the rail. Rounded to whole
+        // pixels so they stay crisp and identical to each other at any size.
+        ctx.setFillColor(NSColor(Color(white: 1, opacity: 0.16)).cgColor)
         for db in meterTickDB {
             let pos = (meterPosition(db) * length).rounded()
             guard pos > 0, pos < length else { continue }

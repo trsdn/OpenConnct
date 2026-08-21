@@ -1,181 +1,6 @@
 import SwiftUI
 import AppKit
 
-// MARK: - DiagnosticsBar
-//
-// Two audiences, two levels. Day to day the user only needs to know whether the
-// thing is working, so the bar shows one plain-language status and nothing else.
-// The counters behind it (xruns, drift in ppm, ring fill) are engineering
-// telemetry: useful when diagnosing a fault, meaningless otherwise, and actively
-// harmful in the default view because they change several times a second and
-// shift the layout around them.
-//
-// Every numeric row is monospaced-digit and fixed-width so nothing reflows as
-// values change.
-
-private struct DiagnosticsBar: View {
-    @ObservedObject var source: DiagnosticsSource
-    @ObservedObject var store: ParameterStore
-    @State private var showDetails = false
-    @State private var showDevices = false
-
-    private var diagnostics: EngineDiagnostics { source.value }
-
-    private enum Status {
-        case ready, noDriver, stopped, glitching
-
-        var text: String {
-            switch self {
-            case .ready: return "Ready"
-            case .noDriver: return "Virtual device not found"
-            case .stopped: return "Engine stopped"
-            case .glitching: return "Audio dropouts detected"
-            }
-        }
-
-        var colour: Color {
-            switch self {
-            case .ready: return Theme.meterGreen
-            case .noDriver, .glitching: return Theme.meterAmber
-            case .stopped: return Theme.meterRed
-            }
-        }
-    }
-
-    private var status: Status {
-        if !diagnostics.running { return .stopped }
-        if !diagnostics.sinkAvailable { return .noDriver }
-        // Recent, not ever. Binding and priming the microphones costs a handful
-        // of dropouts on every launch; testing the lifetime total lights this
-        // warning at startup and never clears it.
-        if diagnostics.hasRecentDropout { return .glitching }
-        return .ready
-    }
-
-    var body: some View {
-        HStack(spacing: 8) {
-            Circle()
-                .fill(status.colour)
-                .frame(width: 6, height: 6)
-
-            Text(status.text)
-                .font(Theme.captionFont)
-                .foregroundColor(status == .ready ? Theme.textSecondary : status.colour)
-                .fixedSize(horizontal: true, vertical: false)
-
-            Spacer(minLength: 8)
-
-            Button {
-                showDevices = true
-            } label: {
-                Label("Inputs", systemImage: "slider.horizontal.3")
-                    .font(Theme.captionFont)
-                    .foregroundColor(Theme.textSecondary)
-            }
-            .buttonStyle(.plain)
-            .help("Choose which inputs OpenConnect uses")
-
-            Button {
-                showDetails.toggle()
-            } label: {
-                Text("Details")
-                    .font(Theme.captionFont)
-                    .foregroundColor(Theme.textDisabled)
-            }
-            .buttonStyle(.plain)
-            .popover(isPresented: $showDetails, arrowEdge: .bottom) {
-                DiagnosticsDetail(diagnostics: diagnostics)
-            }
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 4)
-        .frame(height: 24)
-        .background(Theme.panel)
-        .sheet(isPresented: $showDevices) {
-            DeviceSelectionView(store: store)
-        }
-    }
-}
-
-// MARK: - DiagnosticsDetail
-
-private struct DiagnosticsDetail: View {
-    let diagnostics: EngineDiagnostics
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("Diagnostics")
-                .font(Theme.titleFont)
-                .foregroundColor(Theme.textPrimary)
-
-            row("Dropouts",
-                value: "\(diagnostics.underruns + diagnostics.overruns)",
-                help: "Times audio arrived too late or too early to be used, "
-                    + "counted since the app started. A few while the microphones "
-                    + "are being connected are normal; the number should then stop "
-                    + "growing. If it keeps climbing while you are talking, that is "
-                    + "a fault.")
-
-            row("Dropped edits",
-                value: "\(diagnostics.droppedParameters)",
-                help: "Control changes the audio thread could not accept in time. Should stay at 0.")
-
-            if !diagnostics.perChannelRatioPPM.isEmpty {
-                Divider().background(Theme.border)
-                Text("Clock correction per microphone")
-                    .font(Theme.labelFont)
-                    .foregroundColor(Theme.textSecondary)
-                Text("Each USB microphone runs on its own crystal, slightly off 48 kHz. "
-                     + "This is how hard OpenConnect is stretching that mic to keep it in sync, "
-                     + "in parts per million. Anything under 100 is normal once it has settled. "
-                     + "Just after a microphone is connected the figure swings wide for up to a "
-                     + "minute while it finds the right rate; that is expected.")
-                    .font(Theme.captionFont)
-                    .foregroundColor(Theme.textDisabled)
-                    .fixedSize(horizontal: false, vertical: true)
-
-                ForEach(diagnostics.perChannelRatioPPM.sorted(by: { $0.key < $1.key }), id: \.key) { uid, ppm in
-                    HStack(spacing: 8) {
-                        Text(diagnostics.perChannelName[uid] ?? uid)
-                            .font(Theme.labelFont)
-                            .foregroundColor(Theme.textSecondary)
-                            .lineLimit(1)
-                        Spacer(minLength: 12)
-                        Text(String(format: "%+.0f ppm", ppm))
-                            .font(Theme.valueFont)
-                            .monospacedDigit()
-                            .foregroundColor(abs(ppm) > 100 ? Theme.meterAmber : Theme.textPrimary)
-                            .frame(width: 74, alignment: .trailing)
-                    }
-                }
-            }
-        }
-        .padding(14)
-        .frame(width: 320, alignment: .leading)
-    }
-
-    @ViewBuilder
-    private func row(_ label: String, value: String, help: String) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            HStack(spacing: 8) {
-                Text(label)
-                    .font(Theme.labelFont)
-                    .foregroundColor(Theme.textSecondary)
-                Spacer(minLength: 12)
-                Text(value)
-                    .font(Theme.valueFont)
-                    .monospacedDigit()
-                    .foregroundColor(value == "0" ? Theme.textPrimary : Theme.meterAmber)
-                    .frame(width: 74, alignment: .trailing)
-            }
-            Text(help)
-                .font(Theme.captionFont)
-                .foregroundColor(Theme.textDisabled)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-    }
-}
-
 // MARK: - Empty state
 
 private struct EmptyMicView: View {
@@ -247,9 +72,6 @@ struct MixerView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            DiagnosticsBar(source: store.meterHub.diagnostics, store: store)
-            Divider().background(Theme.border)
-
             if store.microphonePermissionDenied {
                 PermissionDeniedView()
             } else if store.channels.isEmpty {
@@ -272,40 +94,34 @@ struct MixerView: View {
 
     @ViewBuilder
     private var stripArea: some View {
-        HStack(alignment: .top, spacing: 8) {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(alignment: .top, spacing: 8) {
-                    ForEach(store.channels) { ch in
-                        ChannelStripView(
-                            settings: ch,
-                            connection: store.meterHub.connection(for: ch.deviceUID),
-                            meterSource: store.meterHub.meterSource(for: ch.deviceUID),
-                            store: store,
-                            isSelected: selectedUID == ch.deviceUID,
-                            onSelect: { onSelectChannel(ch.deviceUID) }
-                        )
-                        // Deliberately a fixed height, not a flexible one. Meter
-                        // redraw cost scales with the drawn area, and letting the
-                        // strips stretch to 460pt took idle CPU from 6% to 16% on
-                        // three channels. The black band the user saw came from
-                        // the column not filling, not from the strips being short,
-                        // so the strips stay put and the column absorbs the space.
-                        .frame(height: 280)
-                    }
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(alignment: .top, spacing: 8) {
+                ForEach(store.channels) { ch in
+                    ChannelStripView(
+                        settings: ch,
+                        connection: store.meterHub.connection(for: ch.deviceUID),
+                        meterSource: store.meterHub.meterSource(for: ch.deviceUID),
+                        store: store,
+                        isSelected: selectedUID == ch.deviceUID,
+                        onSelect: { onSelectChannel(ch.deviceUID) }
+                    )
+                    // Deliberately a fixed height, not a flexible one. Meter
+                    // redraw cost scales with the drawn area, and letting the
+                    // strips stretch to 460pt took idle CPU from 6% to 16% on
+                    // three channels. The black band the user saw came from
+                    // the column not filling, not from the strips being short,
+                    // so the strips stay put and the column absorbs the space.
+                    .frame(height: 280)
                 }
-                .padding(12)
-                // Pin the strips to the top so the leftover space in a tall window
-                // collects below them rather than floating them in the middle.
-                .frame(maxHeight: .infinity, alignment: .top)
-            }
 
-            // Outside the scroll view on purpose: the summed level is the one
-            // reading that must never scroll out of sight, however many
-            // microphones are open.
-            MasterLevelMeter(source: store.meterHub.master)
-                .frame(height: 280)
-                .padding(.top, 12)
-                .padding(.trailing, 12)
+                // Last in the row, where the next microphone would go.
+                AddChannelTile { showDevices = true }
+                    .frame(height: 280)
+            }
+            .padding(12)
+            // Pin the strips to the top so the leftover space in a tall window
+            // collects below them rather than floating them in the middle.
+            .frame(maxHeight: .infinity, alignment: .top)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }

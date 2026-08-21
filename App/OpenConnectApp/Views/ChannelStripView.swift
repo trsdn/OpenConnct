@@ -179,6 +179,83 @@ private struct SoloButton: View {
     }
 }
 
+// MARK: - MicTileButton
+
+/// The microphone tile at the top of a strip, and the way into that mic's
+/// settings.
+///
+/// Borrowed from RØDE Connect, where clicking the mic picture is how you open
+/// its controls. It reads as a button because it is drawn as one — a filled
+/// tile that lights up under the pointer — which the old bare 14pt glyph did
+/// not. The whole strip still selects on click; this just gives the gesture an
+/// obvious target instead of leaving it undiscoverable.
+private struct MicTileButton: View {
+    @ObservedObject var connection: ChannelConnectionSource
+    let isSelected: Bool
+    let action: () -> Void
+
+    @State private var hovering = false
+
+    var body: some View {
+        let connected = connection.connected
+        Button(action: action) {
+            Image(systemName: connected ? "mic.fill" : "mic.slash.fill")
+                .font(.system(size: 20))
+                .foregroundColor(connected ? Theme.textPrimary : Theme.textDisabled)
+                .frame(width: 44, height: 44)
+                .background(
+                    RoundedRectangle(cornerRadius: Theme.radiusMedium)
+                        .fill(isSelected ? Theme.accentDim : Theme.raised)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: Theme.radiusMedium)
+                        .strokeBorder(
+                            isSelected ? Theme.accent
+                                : hovering ? Theme.textSecondary : Color.clear,
+                            lineWidth: 1.5)
+                )
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering = $0 }
+        .help("Einstellungen für dieses Mikrofon öffnen")
+        .accessibilityLabel(Text("Einstellungen öffnen"))
+    }
+}
+
+// MARK: - RemoveChannelButton
+
+/// The small × in the strip's top corner, straight from RØDE Connect.
+///
+/// Only visible while the pointer is over the strip. It removes a microphone
+/// from the mixer, which is a rare and mildly destructive action, and a row of
+/// permanent × buttons would draw the eye to exactly the control the user wants
+/// least often. Nothing is lost by using it: the mic's settings stay on disk
+/// under its UID and come back with it.
+private struct RemoveChannelButton: View {
+    let visible: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: "xmark")
+                .font(.system(size: 8, weight: .bold))
+                .foregroundColor(Theme.textPrimary)
+                .frame(width: 15, height: 15)
+                // Sits on the corner of the mic tile, so it needs its own
+                // ground to stay legible against it.
+                .background(Circle().fill(Theme.bg))
+                .overlay(Circle().strokeBorder(Theme.border, lineWidth: 1))
+                .contentShape(Circle())
+        }
+        .buttonStyle(.plain)
+        .opacity(visible ? 1 : 0)
+        .allowsHitTesting(visible)
+        .help("Dieses Mikrofon aus dem Mixer nehmen")
+        .accessibilityLabel(Text("Mikrofon entfernen"))
+        .accessibilityHidden(!visible)
+    }
+}
+
 // MARK: - ChannelStripView
 
 struct ChannelStripView: View {
@@ -189,24 +266,36 @@ struct ChannelStripView: View {
     let isSelected: Bool
     let onSelect: () -> Void
 
+    @State private var hovering = false
+
     private var effectivelyMuted: Bool { store.isEffectivelyMuted(settings) }
     private var uid: String { settings.deviceUID }
 
     var body: some View {
         VStack(spacing: 6) {
-            // Channel name
-            Button(action: onSelect) {
-                Text(settings.deviceName)
-                    .font(Theme.titleFont)
-                    .foregroundColor(isSelected ? Theme.accent : Theme.textPrimary)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-                    .frame(maxWidth: .infinity)
-            }
-            .buttonStyle(.plain)
+            // Name gets the strip's full width back: the remove button is an
+            // overlay on the tile below, not a sibling here. Sharing the row
+            // with it cost 18 of 64 points and turned every name into an
+            // ellipsis.
+            Text(settings.deviceName)
+                .font(Theme.titleFont)
+                .foregroundColor(isSelected ? Theme.accent : Theme.textPrimary)
+                .lineLimit(1)
+                .truncationMode(.middle)
+                .frame(maxWidth: .infinity)
+                .frame(height: 16)
 
-            // Mic icon
-            ConnectionIcon(source: connection)
+            ZStack(alignment: .topTrailing) {
+                MicTileButton(
+                    connection: connection,
+                    isSelected: isSelected,
+                    action: onSelect)
+                    .frame(maxWidth: .infinity)
+
+                RemoveChannelButton(visible: hovering) {
+                    store.setDevice(uid, enabled: false)
+                }
+            }
 
             // dB readout for fader
             ValueText(
@@ -255,5 +344,51 @@ struct ChannelStripView: View {
         .frame(width: 80)
         .contentShape(Rectangle())
         .onTapGesture(perform: onSelect)
+        .onHover { hovering = $0 }
     }
 }
+
+// MARK: - AddChannelTile
+
+/// The "+" slot at the end of the strip row, borrowed from RØDE Connect.
+///
+/// The device picker was previously reachable only from a small text button in
+/// the status bar, which is a poor place for the one action a new user needs
+/// first. An empty slot sitting where the next microphone would go says what it
+/// does without a label.
+struct AddChannelTile: View {
+    let action: () -> Void
+
+    @State private var hovering = false
+
+    var body: some View {
+        Button(action: action) {
+            VStack(spacing: 8) {
+                Image(systemName: "plus")
+                    .font(.system(size: 22, weight: .light))
+                    .foregroundColor(hovering ? Theme.textPrimary : Theme.textDisabled)
+                Text("Mikrofon")
+                    .font(Theme.captionFont)
+                    .foregroundColor(Theme.textDisabled)
+            }
+            .frame(width: 56)
+            .frame(maxHeight: .infinity)
+            .background(
+                RoundedRectangle(cornerRadius: Theme.radiusMedium)
+                    .fill(hovering ? Theme.panel : Color.clear)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: Theme.radiusMedium)
+                            .strokeBorder(
+                                Theme.border,
+                                style: StrokeStyle(lineWidth: 1, dash: [4, 3]))
+                    )
+            )
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering = $0 }
+        .help("Weitere Mikrofone hinzufügen oder abwählen")
+        .accessibilityLabel(Text("Mikrofon hinzufügen"))
+    }
+}
+
