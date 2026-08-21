@@ -35,8 +35,11 @@ struct RootView: View {
             Group {
                 if let uid = effectiveUID,
                    let settings = store.channels.first(where: { $0.deviceUID == uid }) {
-                    let meters = store.meters[uid] ?? ChannelMeters()
-                    MicDetailView(settings: settings, meters: meters, store: store)
+                    MicDetailView(
+                        settings: settings,
+                        connection: store.meterHub.connection(for: uid),
+                        meterSource: store.meterHub.meterSource(for: uid),
+                        store: store)
                 } else {
                     detailPlaceholder
                 }

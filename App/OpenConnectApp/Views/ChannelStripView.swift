@@ -183,7 +183,8 @@ private struct SoloButton: View {
 
 struct ChannelStripView: View {
     let settings: ChannelSettings
-    let meters: ChannelMeters
+    let connection: ChannelConnectionSource
+    @ObservedObject var meterSource: ChannelMeterSource
     @ObservedObject var store: ParameterStore
     let isSelected: Bool
     let onSelect: () -> Void
@@ -205,9 +206,7 @@ struct ChannelStripView: View {
             .buttonStyle(.plain)
 
             // Mic icon
-            Image(systemName: meters.connected ? "mic.fill" : "mic.slash.fill")
-                .foregroundColor(meters.connected ? Theme.textSecondary : Theme.textDisabled)
-                .font(.system(size: 14))
+            ConnectionIcon(source: connection)
 
             // dB readout for fader
             ValueText(
@@ -224,13 +223,7 @@ struct ChannelStripView: View {
                 .frame(width: 28)
                 .opacity(effectivelyMuted ? 0.4 : 1)
 
-                LevelMeterView(
-                    rmsDB: effectivelyMuted ? -120 : meters.outputRMSDB,
-                    peakDB: effectivelyMuted ? -120 : meters.outputPeakDB,
-                    orientation: .vertical,
-                    width: 8
-                )
-                .frame(width: 8)
+                StripLevelMeter(source: meterSource, muted: effectivelyMuted)
             }
             .frame(maxHeight: .infinity)
 

@@ -33,6 +33,13 @@ func meterPosition(_ db: Float) -> CGFloat {
 enum MeterOrientation { case vertical, horizontal }
 
 // MARK: - LevelMeterView
+//
+// Both meters are drawn with `Canvas` rather than nested Shape views inside a
+// `GeometryReader`. They repaint 30 times a second, and as a view hierarchy
+// each repaint pushed a fresh layout pass and a subgraph of rectangles through
+// AttributeGraph. `Canvas` is a single drawing closure with no view graph at
+// all, which is the difference between a meter costing a few percent of a core
+// and costing a fraction of one.
 
 /// Shows RMS as a solid bar and input peak as a thin held tick.
 /// Orientation: .vertical for channel strips, .horizontal for detail view.
@@ -47,143 +54,59 @@ struct LevelMeterView: View {
     private let redDB: Float   = -6
 
     var body: some View {
-        GeometryReader { geo in
-            let length = orientation == .vertical ? geo.size.height : geo.size.width
-            let rmsFrac  = meterPosition(rmsDB)
-            let peakFrac = meterPosition(peakDB)
-            let rmsLen  = rmsFrac  * length
-            let peakPos = peakFrac * length
+        Canvas(opaque: false, rendersAsynchronously: false) { ctx, size in
+            let vertical = orientation == .vertical
+            let length = vertical ? size.height : size.width
+            let thickness = vertical ? size.width : size.height
 
-            if orientation == .vertical {
-                ZStack(alignment: .bottom) {
-                    // Track
-                    RoundedRectangle(cornerRadius: 2)
-                        .fill(Theme.meterTrack)
-                    // RMS bar
-                    verticalRMSBar(length: length, rmsLen: rmsLen)
-                    // Peak tick (2 px tall)
-                    peakTick(length: length, pos: peakPos, isVertical: true)
-                }
-                .frame(width: width)
-                .accessibilityHidden(true)
-            } else {
-                ZStack(alignment: .leading) {
-                    RoundedRectangle(cornerRadius: 2)
-                        .fill(Theme.meterTrack)
-                    horizontalRMSBar(length: length, rmsLen: rmsLen)
-                    peakTick(length: length, pos: peakPos, isVertical: false)
-                }
-                .frame(height: width)
-                .accessibilityHidden(true)
-            }
+            ctx.fill(
+                Path(roundedRect: CGRect(origin: .zero, size: size), cornerRadius: 2),
+                with: .color(Theme.meterTrack))
+
+            let rmsLen = meterPosition(rmsDB) * length
+            let amberPos = meterPosition(amberDB) * length
+            let redPos = meterPosition(redDB) * length
+
+            // The bar is drawn as three fixed colour bands clipped to the
+            // current level, so a band boundary always sits at the same dBFS
+            // value regardless of level.
+            segment(ctx, from: 0, to: min(rmsLen, amberPos),
+                    colour: Theme.meterGreen, vertical: vertical,
+                    length: length, thickness: thickness)
+            segment(ctx, from: amberPos, to: min(rmsLen, redPos),
+                    colour: Theme.meterAmber, vertical: vertical,
+                    length: length, thickness: thickness)
+            segment(ctx, from: redPos, to: rmsLen,
+                    colour: Theme.meterRed, vertical: vertical,
+                    length: length, thickness: thickness)
+
+            let peakPos = meterPosition(peakDB) * length
+            let tickColour = peakDB > redDB ? Theme.meterRed
+                           : peakDB > amberDB ? Theme.meterAmber
+                           : Theme.meterGreen
+            segment(ctx, from: peakPos, to: peakPos + 2,
+                    colour: tickColour, vertical: vertical,
+                    length: length, thickness: thickness)
         }
+        .frame(width: orientation == .vertical ? width : nil,
+               height: orientation == .vertical ? nil : width)
+        .accessibilityHidden(true)
     }
 
-    // MARK: Vertical RMS bar (fills from bottom)
-    @ViewBuilder
-    private func verticalRMSBar(length: CGFloat, rmsLen: CGFloat) -> some View {
-        let amberPos = meterPosition(amberDB) * length
-        let redPos   = meterPosition(redDB)   * length
+    /// Fills the band between two distances measured from the meter's origin —
+    /// the bottom edge when vertical, the leading edge when horizontal.
+    private func segment(
+        _ ctx: GraphicsContext, from: CGFloat, to: CGFloat, colour: Color,
+        vertical: Bool, length: CGFloat, thickness: CGFloat
+    ) {
+        let lo = max(0, min(from, length))
+        let hi = max(0, min(to, length))
+        guard hi > lo else { return }
 
-        // Green segment
-        let greenHeight = min(rmsLen, amberPos)
-        if greenHeight > 0 {
-            VStack(spacing: 0) {
-                Spacer(minLength: 0)
-                Rectangle()
-                    .fill(Theme.meterGreen)
-                    .frame(width: width, height: greenHeight)
-            }
-        }
-        // Amber segment
-        let amberHeight = max(0, min(rmsLen, redPos) - amberPos)
-        if amberHeight > 0 {
-            VStack(spacing: 0) {
-                Spacer(minLength: 0)
-                Rectangle()
-                    .fill(Theme.meterAmber)
-                    .frame(width: width, height: amberHeight)
-                    .offset(y: 0)
-            }
-            .frame(height: amberPos + amberHeight, alignment: .bottom)
-        }
-        // Red segment
-        let redHeight = max(0, rmsLen - redPos)
-        if redHeight > 0 {
-            VStack(spacing: 0) {
-                Spacer(minLength: 0)
-                Rectangle()
-                    .fill(Theme.meterRed)
-                    .frame(width: width, height: redHeight)
-            }
-            .frame(height: redPos + redHeight, alignment: .bottom)
-        }
-    }
-
-    // MARK: Horizontal RMS bar (fills from left)
-    @ViewBuilder
-    private func horizontalRMSBar(length: CGFloat, rmsLen: CGFloat) -> some View {
-        let amberPos = meterPosition(amberDB) * length
-        let redPos   = meterPosition(redDB)   * length
-
-        let greenWidth = min(rmsLen, amberPos)
-        if greenWidth > 0 {
-            HStack(spacing: 0) {
-                Rectangle()
-                    .fill(Theme.meterGreen)
-                    .frame(width: greenWidth, height: width)
-                Spacer(minLength: 0)
-            }
-        }
-        let amberWidth = max(0, min(rmsLen, redPos) - amberPos)
-        if amberWidth > 0 {
-            HStack(spacing: 0) {
-                Spacer(minLength: 0)
-                    .frame(width: amberPos)
-                Rectangle()
-                    .fill(Theme.meterAmber)
-                    .frame(width: amberWidth, height: width)
-                Spacer(minLength: 0)
-            }
-        }
-        let redWidth = max(0, rmsLen - redPos)
-        if redWidth > 0 {
-            HStack(spacing: 0) {
-                Spacer(minLength: 0)
-                    .frame(width: redPos)
-                Rectangle()
-                    .fill(Theme.meterRed)
-                    .frame(width: redWidth, height: width)
-                Spacer(minLength: 0)
-            }
-        }
-    }
-
-    // MARK: Peak tick
-    @ViewBuilder
-    private func peakTick(length: CGFloat, pos: CGFloat, isVertical: Bool) -> some View {
-        let tickColor = peakDB > redDB ? Theme.meterRed
-                      : peakDB > amberDB ? Theme.meterAmber
-                      : Theme.meterGreen
-
-        if isVertical {
-            VStack(spacing: 0) {
-                Spacer(minLength: 0)
-                Rectangle()
-                    .fill(tickColor)
-                    .frame(width: width, height: 2)
-            }
-            .frame(height: pos + 2, alignment: .bottom)
-        } else {
-            HStack(spacing: 0) {
-                Spacer(minLength: 0)
-                    .frame(width: max(0, pos - 1))
-                Rectangle()
-                    .fill(tickColor)
-                    .frame(width: 2, height: width)
-                Spacer(minLength: 0)
-            }
-        }
+        let rect = vertical
+            ? CGRect(x: 0, y: length - hi, width: thickness, height: hi - lo)
+            : CGRect(x: lo, y: 0, width: hi - lo, height: thickness)
+        ctx.fill(Path(rect), with: .color(colour))
     }
 }
 
@@ -207,40 +130,25 @@ struct GainReductionMeterView: View {
     }
 
     var body: some View {
-        GeometryReader { geo in
-            let length = orientation == .vertical ? geo.size.height : geo.size.width
-            let frac   = reductionFraction(reductionDB)
-            let fillLen = frac * length
+        Canvas(opaque: false, rendersAsynchronously: false) { ctx, size in
+            ctx.fill(
+                Path(roundedRect: CGRect(origin: .zero, size: size), cornerRadius: 2),
+                with: .color(Theme.meterTrack))
 
-            if orientation == .vertical {
-                ZStack(alignment: .top) {
-                    RoundedRectangle(cornerRadius: 2).fill(Theme.meterTrack)
-                    if fillLen > 0 {
-                        VStack(spacing: 0) {
-                            Rectangle()
-                                .fill(Theme.meterAmber.opacity(0.8))
-                                .frame(width: width, height: fillLen)
-                            Spacer(minLength: 0)
-                        }
-                    }
-                }
-                .frame(width: width)
-                .accessibilityHidden(true)
-            } else {
-                ZStack(alignment: .trailing) {
-                    RoundedRectangle(cornerRadius: 2).fill(Theme.meterTrack)
-                    if fillLen > 0 {
-                        HStack(spacing: 0) {
-                            Spacer(minLength: 0)
-                            Rectangle()
-                                .fill(Theme.meterAmber.opacity(0.8))
-                                .frame(width: fillLen, height: width)
-                        }
-                    }
-                }
-                .frame(height: width)
-                .accessibilityHidden(true)
-            }
+            let vertical = orientation == .vertical
+            let length = vertical ? size.height : size.width
+            let fillLen = reductionFraction(reductionDB) * length
+            guard fillLen > 0 else { return }
+
+            // Gain reduction reads as the bar eating into the track: downward
+            // from the top when vertical, leftward from the right when not.
+            let rect = vertical
+                ? CGRect(x: 0, y: 0, width: size.width, height: fillLen)
+                : CGRect(x: length - fillLen, y: 0, width: fillLen, height: size.height)
+            ctx.fill(Path(rect), with: .color(Theme.meterAmber.opacity(0.8)))
         }
+        .frame(width: orientation == .vertical ? width : nil,
+               height: orientation == .vertical ? nil : width)
+        .accessibilityHidden(true)
     }
 }

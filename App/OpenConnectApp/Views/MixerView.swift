@@ -14,10 +14,12 @@ import AppKit
 // values change.
 
 private struct DiagnosticsBar: View {
-    let diagnostics: EngineDiagnostics
+    @ObservedObject var source: DiagnosticsSource
     @ObservedObject var store: ParameterStore
     @State private var showDetails = false
     @State private var showDevices = false
+
+    private var diagnostics: EngineDiagnostics { source.value }
 
     private enum Status {
         case ready, noDriver, stopped, glitching
@@ -236,7 +238,7 @@ struct MixerView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            DiagnosticsBar(diagnostics: store.diagnostics, store: store)
+            DiagnosticsBar(source: store.meterHub.diagnostics, store: store)
             Divider().background(Theme.border)
 
             if store.microphonePermissionDenied {
@@ -260,10 +262,10 @@ struct MixerView: View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(alignment: .top, spacing: 8) {
                 ForEach(store.channels) { ch in
-                    let m = store.meters[ch.deviceUID] ?? ChannelMeters()
                     ChannelStripView(
                         settings: ch,
-                        meters: m,
+                        connection: store.meterHub.connection(for: ch.deviceUID),
+                        meterSource: store.meterHub.meterSource(for: ch.deviceUID),
                         store: store,
                         isSelected: selectedUID == ch.deviceUID,
                         onSelect: { onSelectChannel(ch.deviceUID) }

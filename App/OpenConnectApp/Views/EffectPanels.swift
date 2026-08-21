@@ -55,30 +55,11 @@ private struct EffectHeader: View {
 
 // MARK: - Gain reduction strip
 
-private struct GRStrip: View {
-    let reductionDB: Float
-
-    var body: some View {
-        HStack(spacing: 6) {
-            Text("GR")
-                .font(Theme.captionFont)
-                .foregroundColor(Theme.textSecondary)
-                .frame(width: 24, alignment: .leading)
-            GainReductionMeterView(reductionDB: reductionDB, orientation: .horizontal, width: 8)
-                .frame(height: 8)
-            ValueText(
-                text: reductionDB > 0.1 ? String(format: "−%.1f dB", reductionDB) : "—",
-                colour: Theme.textSecondary)
-        }
-        .frame(height: 22)
-    }
-}
-
 // MARK: - GatePanel
 
 struct GatePanel: View {
     let settings: ChannelSettings
-    let meters: ChannelMeters
+    @ObservedObject var meterSource: ChannelMeterSource
     @ObservedObject var store: ParameterStore
     @State private var expanded = false
 
@@ -98,7 +79,7 @@ struct GatePanel: View {
 
                 if expanded {
                     VStack(spacing: 6) {
-                        GRStrip(reductionDB: -meters.gateReductionDB)
+                        LiveGRStrip(source: meterSource, stage: .gate)
 
                         ParamSliderRow(
                             "Threshold",
@@ -151,7 +132,7 @@ struct GatePanel: View {
 
 struct CompressorPanel: View {
     let settings: ChannelSettings
-    let meters: ChannelMeters
+    @ObservedObject var meterSource: ChannelMeterSource
     @ObservedObject var store: ParameterStore
     @State private var expanded = false
 
@@ -171,7 +152,7 @@ struct CompressorPanel: View {
 
                 if expanded {
                     VStack(spacing: 6) {
-                        GRStrip(reductionDB: -meters.compressorReductionDB)
+                        LiveGRStrip(source: meterSource, stage: .compressor)
 
                         ParamSliderRow(
                             "Threshold",

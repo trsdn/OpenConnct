@@ -178,41 +178,12 @@ private struct HPFRow: View {
     private var isContinuous: Bool { settings.hpfMode == .continuous }
 }
 
-// MARK: - InputMeterRow
-
-private struct InputMeterRow: View {
-    let meters: ChannelMeters
-
-    var body: some View {
-        VStack(spacing: 4) {
-            meterLine("IN", rms: meters.inputRMSDB, peak: meters.inputPeakDB)
-            meterLine("OUT", rms: meters.outputRMSDB, peak: meters.outputPeakDB)
-        }
-    }
-
-    @ViewBuilder
-    private func meterLine(_ label: String, rms: Float, peak: Float) -> some View {
-        HStack(spacing: 6) {
-            Text(label)
-                .font(Theme.captionFont)
-                .foregroundColor(Theme.textSecondary)
-                .frame(width: 26, alignment: .leading)
-            LevelMeterView(rmsDB: rms, peakDB: peak, orientation: .horizontal, width: 12)
-                .frame(height: 12)
-            ValueText(
-                text: peak > -120 ? String(format: "%.1f", peak) : "—",
-                width: 44,
-                colour: Theme.textSecondary)
-        }
-        .frame(height: 16)
-    }
-}
-
 // MARK: - MicDetailView
 
 struct MicDetailView: View {
     let settings: ChannelSettings
-    let meters: ChannelMeters
+    let connection: ChannelConnectionSource
+    @ObservedObject var meterSource: ChannelMeterSource
     @ObservedObject var store: ParameterStore
 
     var body: some View {
@@ -220,16 +191,12 @@ struct MicDetailView: View {
             VStack(alignment: .leading, spacing: 12) {
                 // Header
                 HStack {
-                    Image(systemName: meters.connected ? "mic.fill" : "mic.slash.fill")
-                        .foregroundColor(meters.connected ? Theme.accent : Theme.textDisabled)
-                        .font(.system(size: 18))
+                    ConnectionIcon(source: connection, activeColour: Theme.accent, size: 18)
                     VStack(alignment: .leading, spacing: 2) {
                         Text(settings.deviceName)
                             .font(Theme.titleFont)
                             .foregroundColor(Theme.textPrimary)
-                        Text(meters.connected ? "Connected" : "Disconnected")
-                            .font(Theme.captionFont)
-                            .foregroundColor(meters.connected ? Theme.meterGreen : Theme.textDisabled)
+                        ConnectionLabel(source: connection)
                     }
                     Spacer()
                 }
@@ -237,7 +204,7 @@ struct MicDetailView: View {
 
                 // Input / output meters
                 CardSection {
-                    InputMeterRow(meters: meters)
+                    LiveInputMeterRow(source: meterSource)
                 }
 
                 // Gain controls
@@ -252,8 +219,8 @@ struct MicDetailView: View {
                 }
 
                 // Effect panels
-                GatePanel(settings: settings, meters: meters, store: store)
-                CompressorPanel(settings: settings, meters: meters, store: store)
+                GatePanel(settings: settings, meterSource: meterSource, store: store)
+                CompressorPanel(settings: settings, meterSource: meterSource, store: store)
                 ExciterPanel(settings: settings, store: store)
                 BigBottomPanel(settings: settings, store: store)
             }
