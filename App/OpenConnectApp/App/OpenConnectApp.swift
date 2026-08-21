@@ -9,7 +9,15 @@ struct OpenConnectApp: App {
         WindowGroup("OpenConnect") {
             RootView()
                 .environmentObject(store)
-                .frame(minWidth: 760, idealWidth: 900, minHeight: 520, idealHeight: 620)
+                // maxWidth/maxHeight .infinity are the load-bearing part. With
+                // only min and ideal set, the content refuses to grow past its
+                // ideal size, so any window larger than 900x620 left the whole
+                // interface as a small band floating in the middle of a black
+                // window — which is what "the window looks shifted" actually
+                // was. It was never positioned wrong; it was sized wrong.
+                .frame(
+                    minWidth: 760, idealWidth: 900, maxWidth: .infinity,
+                    minHeight: 520, idealHeight: 620, maxHeight: .infinity)
                 .onAppear(perform: startAudio)
         }
         // Without an explicit default the window is sized from the content's

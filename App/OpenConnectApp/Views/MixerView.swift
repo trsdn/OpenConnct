@@ -251,6 +251,10 @@ struct MixerView: View {
                 stripArea
             }
         }
+        // Without this the mixer column keeps its natural height and gets
+        // centred vertically, leaving black bands above and below it in any
+        // window taller than the content.
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Theme.bg)
         .sheet(isPresented: $showDevices) {
             DeviceSelectionView(store: store)
@@ -270,10 +274,20 @@ struct MixerView: View {
                         isSelected: selectedUID == ch.deviceUID,
                         onSelect: { onSelectChannel(ch.deviceUID) }
                     )
-                    .frame(height: 280)
+                    // Strips grow with the window, but only so far. Letting
+                    // them stretch without limit produced a 767pt fader on a
+                    // tall window, which is neither usable nor sensible; a
+                    // fader only needs enough travel to be set precisely. The
+                    // minimum is what the labels, meter and buttons need to
+                    // stay legible.
+                    .frame(minHeight: 280, maxHeight: 460)
                 }
             }
             .padding(12)
+            // Pin the strips to the top so the leftover space in a tall window
+            // collects below them rather than floating them in the middle.
+            .frame(maxHeight: .infinity, alignment: .top)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }

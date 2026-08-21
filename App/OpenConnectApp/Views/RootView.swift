@@ -29,7 +29,7 @@ struct RootView: View {
                     }
                 }
             )
-            .frame(minWidth: 160, idealWidth: 220, maxWidth: 360)
+            .frame(minWidth: 160, idealWidth: 220, maxWidth: 360, maxHeight: .infinity)
 
             // Right: detail pane or placeholder
             Group {
@@ -44,7 +44,7 @@ struct RootView: View {
                     detailPlaceholder
                 }
             }
-            .frame(minWidth: 360, idealWidth: 440, maxWidth: .infinity)
+            .frame(minWidth: 360, idealWidth: 440, maxWidth: .infinity, maxHeight: .infinity)
         }
         .background(Theme.bg)
         .onChange(of: store.channels) { channels in
