@@ -5,11 +5,11 @@ import OpenConnectDSPShim
 private let driftSampleRate = 48_000.0
 private let driftRingCapacity: UInt32 = 32_768
 private let driftTargetFill: Float = 1_536
-private let driftKp: Float = 2.0e-7
-private let driftKi: Float = 4.0e-9
+private let driftKp: Float = 2.8e-6
+private let driftKi: Float = 1.2e-9
 private let driftIntegratorLimit: Float = 5.0e-4
 private let driftRatioLimit: Float = 1.0e-3
-private let driftSlewPerUpdate: Float = 2.0e-6
+private let driftSlewPerUpdate: Float = 5.0e-6
 
 private struct DriftMetrics {
     var ppm: Double
@@ -26,6 +26,13 @@ private struct DriftMetrics {
     var underrunsAfterSettling: UInt32 = 0
     var overrunsTotal: UInt32 = 0
     var overrunsAfterSettling: UInt32 = 0
+    /// Largest |fill - target| seen after a step disturbance ended. A pure
+    /// integrating loop rings, so this catches an overshoot that the mean and
+    /// the xrun count both hide.
+    var peakErrorAfterDisturbance: Double = 0
+    /// Seconds from the end of the disturbance until |fill - target| stays
+    /// inside `settlingTolerance` for good.
+    var settlingSecondsAfterDisturbance: Double = 0
     var thd: Float?
     var maxFirstDifference: Float?
     var sineSlewLimit: Float?
@@ -82,6 +89,8 @@ private final class DriftSimulator {
         let steadyStart = max(settlingBlocks, totalBlocks * 8 / 10)
         var previousOutput: Float?
         var maxFirstDifference: Float = 0
+        let disturbanceEnd = stallBlocks?.upperBound
+        var lastUnsettledBlock = disturbanceEnd
 
         storage.withUnsafeMutableBufferPointer { storagePointer in
             produce.withUnsafeMutableBufferPointer { producePointer in
@@ -138,6 +147,13 @@ private final class DriftSimulator {
                             metrics.minFill = min(metrics.minFill, fill, postFill)
                             metrics.maxFill = max(metrics.maxFill, fill, postFill)
 
+                            if let disturbanceEnd, block >= disturbanceEnd {
+                                let err = abs(Double(fill) - Double(driftTargetFill))
+                                metrics.peakErrorAfterDisturbance =
+                                    max(metrics.peakErrorAfterDisturbance, err)
+                                if err > Self.settlingTolerance { lastUnsettledBlock = block }
+                            }
+
                             if block >= steadyStart {
                                 steadyFillSum += Double(fill)
                                 steadyCorrectionSum += Double(correction)
@@ -169,6 +185,11 @@ private final class DriftSimulator {
             }
         }
 
+        if let disturbanceEnd, let lastUnsettledBlock {
+            metrics.settlingSecondsAfterDisturbance =
+                Double(lastUnsettledBlock - disturbanceEnd) * Double(blockSize) / driftSampleRate
+        }
+
         if steadyCount > 0 {
             metrics.settledFillMean = steadyFillSum / Double(steadyCount)
             metrics.settledCorrectionMean = steadyCorrectionSum / Double(steadyCount)
@@ -188,6 +209,11 @@ private final class DriftSimulator {
 
         return metrics
     }
+
+    /// How close to target counts as settled. One block of the hardware period
+    /// is the resolution the ring actually moves in, so anything tighter would
+    /// be measuring quantisation rather than the controller.
+    static let settlingTolerance = 32.0
 
     @discardableResult
     private func writeInput(
@@ -281,6 +307,38 @@ final class DriftSoakTests: XCTestCase {
         XCTAssertLessThan(metrics.maxFirstDifference ?? 1, (metrics.sineSlewLimit ?? 0) * 2.5)
     }
 
+    /// A one-block step disturbance, which is what real hardware actually does.
+    ///
+    /// A fifteen-minute soak with two RØDE microphones showed the ring fill
+    /// jumping by exactly one 512-frame hardware period every few minutes —
+    /// a scheduling hiccup where one side ran a cycle without the other. That
+    /// is not drift and cannot be prevented here; the question is only how
+    /// gracefully the controller absorbs it.
+    ///
+    /// The observed answer was: badly. Fill went from 1536 to 1024, overshot
+    /// the other way to 1705, came back down to 28 — within a whisker of an
+    /// underrun — and took about six minutes of visible ringing to settle. One
+    /// real underrun was recorded when a second step arrived during recovery.
+    /// This test pins the response down so that cannot regress.
+    func testControllerAbsorbsAOneBlockStepWithoutRinging() {
+        let blockSize = 512
+        let stallStart = Int(30 * driftSampleRate / Double(blockSize))
+        let metrics = DriftSimulator(
+            ppm: 0, seconds: 600, blockSize: blockSize,
+            stallBlocks: stallStart..<(stallStart + 1)).run()
+        printMetrics("one-block (512 frame) step disturbance", metrics)
+
+        // The step itself is 512 frames. Anything much beyond that is the
+        // controller adding its own excursion on top of the disturbance.
+        XCTAssertLessThan(metrics.peakErrorAfterDisturbance, 640)
+        // Six minutes of ringing was the defect. Ninety seconds is generous for
+        // a correction that is inaudible the whole time it is happening.
+        XCTAssertLessThan(metrics.settlingSecondsAfterDisturbance, 90)
+        XCTAssertEqual(metrics.underrunsTotal, 0)
+        XCTAssertEqual(metrics.overrunsTotal, 0)
+        XCTAssertLessThan(metrics.maxCorrectionOffset, driftRatioLimit + 1.0e-7)
+    }
+
     func testControllerRecoversFromShortProducerStall() {
         let stallStart = Int(30 * driftSampleRate / 256)
         let metrics = DriftSimulator(ppm: 0, seconds: 180, stallBlocks: stallStart..<(stallStart + 4)).run()
@@ -319,8 +377,11 @@ final class DriftSoakTests: XCTestCase {
             "overruns \(metrics.overrunsAfterSettling)/\(metrics.overrunsTotal)",
             "max slew \(String(format: "%.3f", metrics.maxCorrectionSlew * 1.0e6)) ppm/update"
         ]
-        if let thd = metrics.thd {
-            parts.append("THD \(String(format: "%.5f", thd))")
+        if metrics.peakErrorAfterDisturbance > 0 {
+            parts.append("peak error after step \(String(format: "%.0f", metrics.peakErrorAfterDisturbance)) frames")
+            parts.append("settled in \(String(format: "%.1f", metrics.settlingSecondsAfterDisturbance)) s")
+        }
+        if let thd = metrics.thd {            parts.append("THD \(String(format: "%.5f", thd))")
         }
         if let diff = metrics.maxFirstDifference, let limit = metrics.sineSlewLimit {
             parts.append("max Δ \(String(format: "%.5f", diff)) allowed \(String(format: "%.5f", limit * 2.5))")

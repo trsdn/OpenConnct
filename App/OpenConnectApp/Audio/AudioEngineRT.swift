@@ -26,19 +26,36 @@ let kRingTargetFill: Float = 1536
 /// and not the other would make behaviour depend on whether a rebind had
 /// happened.
 ///
-/// The gains are deliberately gentle: the correction must stay in the
-/// parts-per-million range so it can never be heard. The integrator and the
-/// ratio are clamped and the output is slew-limited so that no transient can
-/// produce an audible step.
+/// The correction must stay in the parts-per-million range so it can never be
+/// heard, and the integrator, the ratio and the slew rate are all clamped so
+/// that no transient can produce an audible step.
+///
+/// The gains are chosen for *damping*, not just for gentleness. The fill level
+/// is the integral of the rate error, so the loop is second order:
+///
+///     with a = blockSize*kp and b = blockSize*ki,
+///     natural frequency  = sqrt(b) rad/update,
+///     damping ratio      = a / (2*sqrt(b)),
+///     2% settling        ~ 8/a updates.
+///
+/// The original tuning (kp 2.0e-7, ki 4.0e-9) gave a damping ratio of 0.036,
+/// which is essentially undamped. It held a steady crystal offset perfectly
+/// well, but a one-block step disturbance rang for six minutes and overshot
+/// far enough to come within a whisker of an underrun. That was measured both
+/// in `testControllerAbsorbsAOneBlockStepWithoutRinging` and on real hardware.
+///
+/// These values give a damping ratio near 0.9 and settle a 512-frame step in
+/// well under a minute, while the correction stays inside a millionth-scale
+/// band that is inaudible throughout.
 func ocConfigureDriftController(_ drift: UnsafeMutablePointer<oc_drift_controller>) {
     oc_drift_controller_init(
         drift,
         kRingTargetFill,
-        /* kp */ 2.0e-7,
-        /* ki */ 4.0e-9,
+        /* kp */ 2.8e-6,
+        /* ki */ 1.2e-9,
         /* integrator_limit */ 5.0e-4,
         /* ratio_limit */ 1.0e-3,
-        /* slew_per_update */ 2.0e-6)
+        /* slew_per_update */ 5.0e-6)
 }
 
 // MARK: - Parameter mirror

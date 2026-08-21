@@ -30,11 +30,37 @@ void oc_drift_controller_init(
 oc_float oc_drift_controller_update(oc_drift_controller *controller, oc_float fill_level)
 {
     controller->error = fill_level - controller->target_fill;
-    controller->integrator += controller->ki * controller->error;
-    controller->integrator = oc_clampf(
-        controller->integrator,
-        -controller->integrator_limit,
-        controller->integrator_limit);
+
+    /* Conditional integration.
+     *
+     * The fill level is itself an integral of the rate error, so a plain PI
+     * loop is second order and will ring unless it is damped. Worse, a step
+     * disturbance -- a scheduling hiccup where one side of the ring runs a
+     * cycle without the other, which real hardware does every few minutes --
+     * drives the integrator to its limit within a couple of seconds. It then
+     * has to unwind from saturation *after* the error has already crossed
+     * zero, which is what pushes the fill past the target and out the other
+     * side.
+     *
+     * Integrating only while the proportional-plus-integral output is inside
+     * its limit, or while the error is pushing the output back towards the
+     * middle, removes the windup without touching steady-state accuracy: in
+     * normal operation the output is nowhere near the limit and this is a
+     * no-op. */
+    oc_float unlimited = controller->kp * controller->error + controller->integrator;
+    int saturated_high = unlimited >= controller->ratio_limit;
+    int saturated_low = unlimited <= -controller->ratio_limit;
+    int winding_up =
+        (saturated_high && controller->error > 0.0f) ||
+        (saturated_low && controller->error < 0.0f);
+
+    if (!winding_up) {
+        controller->integrator += controller->ki * controller->error;
+        controller->integrator = oc_clampf(
+            controller->integrator,
+            -controller->integrator_limit,
+            controller->integrator_limit);
+    }
 
     oc_float offset = controller->kp * controller->error + controller->integrator;
     offset = oc_clampf(offset, -controller->ratio_limit, controller->ratio_limit);

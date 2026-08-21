@@ -266,9 +266,12 @@ Confirm:
   "silenced by solo" state rather than the red user-muted state.
 - Both faders work independently.
 
-Then **let it run for at least ten minutes** while speaking into both microphones periodically. Drift
-is cumulative: two USB microphones on independent crystals diverge slowly, so a fault here may take
-minutes to become audible. A thirty-second test proves nothing.
+Then **let it run for at least fifteen minutes** while speaking into both microphones periodically.
+Drift is cumulative, and the ring fill level only moves in whole 512-frame hardware blocks, so at
+realistic crystal offsets one microphone gains a full block only every nine minutes or so. Until
+then both channels will legitimately report *identical* numbers. This has been confirmed on the
+development machine: the two channels stayed byte-identical until roughly t=600 s and then diverged.
+A thirty-second test proves nothing, and a five-minute test proves almost nothing.
 
 Watch the status bar for the whole period:
 
@@ -280,7 +283,19 @@ Watch the status bar for the whole period:
   hardware is a genuine finding worth reporting.
 
 **Known good:** clean audio from both microphones, no clicks or crackles, stable ppm, no badges,
-after ten-plus minutes.
+after fifteen-plus minutes.
+
+For reference, measured on the development machine with both microphones live, sampling the ring
+continuously rather than once per interval:
+
+```
+t=60s   under=0 over=0 dropped=0
+        [RØDE NT-USB Mini  fill 1535/1535.9/1537  ppm -3.9/-0.5/+3.6]
+        [RØDE VideoMic NTG fill 1535/1535.9/1537  ppm -3.9/-0.5/+3.6]
+```
+
+Fill is min/mean/max against a target of 1536 frames. Staying within a couple of frames of target,
+with ppm inside single digits and no underruns, is what healthy looks like.
 
 **Failure symptoms:**
 
@@ -294,16 +309,51 @@ after ten-plus minutes.
 Note that the ring fill level is tracked internally but is **not** currently shown in the interface;
 the ppm readout and the xrun badges are the diagnostics available to you.
 
+### If you want the detailed numbers
+
+Two environment variables exist for diagnosis. Both are off or defaulted in normal use, and neither
+changes what the audio path does:
+
+```bash
+# Log accumulated min/mean/max fill and ppm every 60 seconds. Quit the app first.
+OPENCONNECT_SOAK_LOG=60 /Applications/OpenConnect.app/Contents/MacOS/OpenConnect 2>&1 | grep -a SOAK
+```
+
+```bash
+# Meter refresh rate in Hz; default 20, and 0 disables the meters entirely.
+# With meters off the whole app measures 0.5% of one core with both mics live,
+# which is how we established that the CPU cost is drawing, not audio.
+OPENCONNECT_METER_HZ=0 /Applications/OpenConnect.app/Contents/MacOS/OpenConnect
+```
+
+Running the binary directly like this puts its log on your terminal. Launching the app normally from
+Finder does **not** show these messages anywhere.
+
 ---
 
 ## 6. Hot-plug
 
 Microphones get unplugged constantly, so this must not require restarting the app.
 
-With both running, unplug one microphone. Its channel strip should disappear, the other channel
-should keep working without interruption, and the engine should stay green. Now plug it back in: the
-strip should return **with its previous settings intact** — gain, effects, fader position — because
-settings are persisted per device UID.
+**Please treat this section as the least-tested part of the system.** Every other step above has
+been exercised on the development machine; a physical unplug of a live microphone has not, because
+it needs a hand on the cable. If something is going to be wrong, it is most likely to be here.
+
+With both running, unplug one microphone. Expect:
+
+- Its channel strip disappears.
+- The other channel keeps working **without a gap or a click**. Watch its XRun badge across the
+  unplug — a single xrun at the moment of removal is plausible; a rising count afterwards is not.
+- The engine stays green rather than dropping to a stopped or error state.
+
+Now plug it back in. Expect the strip to return **with its previous settings intact** — gain,
+effects, fader position — because settings are persisted per device UID, not per slot.
+
+There is one specific thing worth listening for on replug. When a channel's ring runs dry the
+engine re-primes it rather than free-running, which briefly re-establishes the buffer before audio
+flows. On replug you may hear the channel come back a fraction of a second late. That is expected.
+What is *not* expected is repeated dropouts, a channel that comes back permanently distorted, or
+ppm that never settles again.
 
 Finally, quit the app, relaunch it, and confirm your settings survived.
 

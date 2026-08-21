@@ -171,7 +171,13 @@ OpenConnect makes the **AUHAL output callback the master clock**. Every render c
 3. Multiplies the nominal rate ratio by the correction factor and passes it to a **fractional resampler**.
 4. Pulls exactly the requested number of frames from the resampler into the DSP chain.
 
-The PI gains (`kp = 2e-7`, `ki = 4e-9`) are deliberately gentle: the correction stays in the parts-per-million range and is completely inaudible. An integrator clamp (±5e-4), a ratio clamp (±1e-3 from 1.0), and a slew limit (2e-6 per update) prevent any transient from producing an audible step.
+The PI gains (`kp = 2.8e-6`, `ki = 1.2e-9`) are chosen for **damping**, not merely for gentleness. Because the ring fill level is itself the integral of the rate error, the loop is second order, and the tuning determines how it responds to a disturbance. With `a = blockSize·kp` and `b = blockSize·ki`, the damping ratio is `a / (2·√b)` and 2% settling takes roughly `8/a` updates.
+
+This matters because real hardware does not only drift, it also **steps**. A fifteen-minute soak with both microphones showed the ring fill jumping by exactly one 512-frame hardware period every few minutes — a scheduling hiccup where one side of the ring runs a cycle without the other. That cannot be prevented here; the only question is how gracefully it is absorbed.
+
+An earlier tuning (`kp = 2e-7`, `ki = 4e-9`) had a damping ratio of 0.036, essentially undamped. It tracked a steady crystal offset perfectly well, but each step disturbance rang for about six minutes and overshot far enough to come within a whisker of an underrun — and one real underrun was recorded when a second step landed during recovery. The current values give a damping ratio near 0.9. Measured on hardware, a step now settles in under 90 seconds instead of 360, peaks at 1 590 frames instead of 1 705, and the fill sits at exactly 1 536.0 with ±0.0 ppm between events.
+
+Anti-windup (the integrator only accumulates while the output is not pushing further into its own limit) is what removes the overshoot; in normal operation the output is nowhere near the limit and it is a no-op. An integrator clamp (±5e-4), a ratio clamp (±1e-3 from 1.0), and a slew limit (5e-6 per update) prevent any transient from producing an audible step. Offline the controller now converges to the true offset exactly — 200.00 ppm measured against 200 ppm applied — where the previous tuning left a standing error of about 8%.
 
 ### Realtime safety
 
