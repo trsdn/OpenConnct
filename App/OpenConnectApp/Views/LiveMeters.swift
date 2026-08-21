@@ -171,7 +171,7 @@ struct LiveInputMeterRow: View {
             meterLine("REIN", tap: .input, peak: m.inputPeakDB, scale: false)
             meterLine("RAUS", tap: .postFader, peak: m.postFaderPeakDB, scale: true)
             HStack(spacing: 6) {
-                Spacer().frame(width: 26)
+                Spacer().frame(width: 32)
                 Text(verdict.text)
                     .font(Theme.captionFont)
                     .foregroundColor(verdictColour(verdict))
@@ -189,7 +189,7 @@ struct LiveInputMeterRow: View {
             Text(label)
                 .font(Theme.captionFont)
                 .foregroundColor(Theme.textSecondary)
-                .frame(width: 26, alignment: .leading)
+                .frame(width: 32, alignment: .leading)
             LiveLevelMeter(
                 source: source, tap: tap, orientation: .horizontal,
                 showsScale: scale)

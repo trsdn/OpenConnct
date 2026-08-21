@@ -1,326 +1,345 @@
 import SwiftUI
 
-// MARK: - EffectPanel header row
+// MARK: - EffectKind
+//
+// The four processing stages, as one enumerable list rather than four
+// near-identical view structs. The previous shape gave each effect its own
+// panel with its own `@State expanded`, which meant four independent
+// accordions: opening a second one pushed the first one's controls off the
+// bottom, and nothing ever closed by itself. Selection now lives in one place
+// so exactly one set of parameters is on screen at a time.
 
-private struct EffectHeader: View {
-    let title: String
-    let isEnabled: Bool
-    let isExpanded: Bool
-    let onToggleEnabled: () -> Void
-    let onToggleExpand: () -> Void
+enum EffectKind: String, CaseIterable, Identifiable {
+    case gate, compressor, exciter, bigBottom
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .gate:      return "Noise Gate"
+        case .compressor: return "Compressor"
+        case .exciter:   return "Aural Exciter"
+        case .bigBottom: return "Big Bottom"
+        }
+    }
+
+    var symbol: String {
+        switch self {
+        case .gate:       return "waveform.path"
+        case .compressor: return "arrow.down.right.and.arrow.up.left"
+        case .exciter:    return "sparkles"
+        case .bigBottom:  return "circle.bottomhalf.filled"
+        }
+    }
+
+    var enabledKeyPath: WritableKeyPath<ChannelSettings, Bool> {
+        switch self {
+        case .gate:       return \.gateEnabled
+        case .compressor: return \.compressorEnabled
+        case .exciter:    return \.exciterEnabled
+        case .bigBottom:  return \.bigBottomEnabled
+        }
+    }
+}
+
+// MARK: - EffectCircleButton
+
+/// One effect as a round on/off button with its name beneath.
+///
+/// Two separate hit targets on purpose. The circle is large and does the
+/// frequent thing (on/off); the small name button underneath does the rare
+/// thing (show the parameters). Combining them was the old behaviour and it
+/// meant switching an effect on also moved everything below it.
+struct EffectCircleButton: View {
+    let kind: EffectKind
+    let isOn: Bool
+    let isSelected: Bool
+    let onToggle: () -> Void
+    let onSelect: () -> Void
+
+    private var ring: Color { isOn ? Theme.meterGreen : Theme.border }
+    private var glyph: Color { isOn ? Theme.meterGreen : Theme.textDisabled }
 
     var body: some View {
-        HStack(spacing: 8) {
-            // Enable toggle (pill). Deliberately its own hit target: the row
-            // used to carry a tap gesture as well, so switching an effect on
-            // also expanded the panel and everything below it moved.
-            Button(action: onToggleEnabled) {
-                Circle()
-                    .fill(isEnabled ? Theme.accent : Theme.raised)
-                    .frame(width: 12, height: 12)
-                    .overlay(
-                        Circle().strokeBorder(
-                            isEnabled ? Theme.accent : Theme.textDisabled,
-                            lineWidth: 1
-                        )
-                    )
-                    .frame(width: 22, height: 22)
-                    .contentShape(Rectangle())
+        VStack(spacing: 6) {
+            Button(action: onToggle) {
+                ZStack {
+                    Circle().fill(Theme.raised)
+                    Circle().strokeBorder(ring, lineWidth: 2)
+                    Image(systemName: kind.symbol)
+                        .font(.system(size: 17, weight: .medium))
+                        .foregroundColor(glyph)
+                }
+                .frame(width: 50, height: 50)
+                .contentShape(Circle())
             }
             .buttonStyle(.plain)
-            .accessibilityLabel(Text(title))
-            .accessibilityValue(Text(isEnabled ? "On" : "Off"))
-            .accessibilityHint(Text(isEnabled ? "Tap to disable" : "Tap to enable"))
+            .accessibilityLabel(Text(kind.title))
+            .accessibilityValue(Text(isOn ? "An" : "Aus"))
+            .accessibilityHint(Text(isOn ? "Schaltet den Effekt aus" : "Schaltet den Effekt ein"))
 
-            Button(action: onToggleExpand) {
-                HStack(spacing: 8) {
-                    Text(title)
-                        .font(Theme.titleFont)
+            Button(action: onSelect) {
+                HStack(spacing: 3) {
+                    Text(kind.title)
+                        .font(Theme.captionFont)
                         .lineLimit(1)
-                        .foregroundColor(isEnabled ? Theme.textPrimary : Theme.textSecondary)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                    Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
-                        .font(.system(size: 10, weight: .semibold))
-                        .foregroundColor(Theme.textSecondary)
-                        .frame(width: 20)
+                        .minimumScaleFactor(0.75)
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 7, weight: .bold))
+                        .rotationEffect(.degrees(isSelected ? 180 : 0))
                 }
+                .foregroundColor(isSelected ? Theme.textPrimary : Theme.textSecondary)
+                .padding(.horizontal, 5)
+                .frame(height: 18)
+                .background(
+                    RoundedRectangle(cornerRadius: Theme.radiusSmall)
+                        .fill(isSelected ? Theme.raised : Color.clear)
+                )
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .accessibilityLabel(Text(isExpanded ? "Collapse \(title)" : "Expand \(title)"))
+            .accessibilityLabel(Text(isSelected
+                ? "\(kind.title) Einstellungen schließen"
+                : "\(kind.title) Einstellungen öffnen"))
         }
-        .frame(height: 24)
+        .frame(maxWidth: .infinity)
     }
 }
 
-// MARK: - Gain reduction strip
+// MARK: - EffectSection
 
-// MARK: - GatePanel
-
-struct GatePanel: View {
+/// The row of four buttons plus, underneath, the parameters of whichever one
+/// is selected.
+struct EffectSection: View {
     let settings: ChannelSettings
     @ObservedObject var meterSource: ChannelMeterSource
     @ObservedObject var store: ParameterStore
-    @State private var expanded = false
-
-    private var uid: String { settings.deviceUID }
-    private var on: Bool { settings.gateEnabled }
+    @Binding var selected: EffectKind?
 
     var body: some View {
         CardSection {
-            VStack(spacing: 8) {
-                EffectHeader(
-                    title: "Noise Gate",
-                    isEnabled: on,
-                    isExpanded: expanded,
-                    onToggleEnabled: { store.update(uid) { $0.gateEnabled.toggle() } },
-                    onToggleExpand: { withAnimation(.easeInOut(duration: 0.15)) { expanded.toggle() } }
-                )
-
-                if expanded {
-                    VStack(spacing: 6) {
-                        LiveGRStrip(source: meterSource, stage: .gate)
-
-                        ParamSliderRow(
-                            "Threshold",
-                            value: bind(settings.gate.thresholdDB, uid: uid, store: store,
-                                        keyPath: \.gate.thresholdDB),
-                            range: -80...0,
-                            format: { formatDB($0) },
-                            enabled: on
-                        )
-                        ParamSliderRow(
-                            "Hysteresis",
-                            value: bind(settings.gate.hysteresisDB, uid: uid, store: store,
-                                        keyPath: \.gate.hysteresisDB),
-                            range: 0...20,
-                            format: { String(format: "%.1f dB", $0) },
-                            enabled: on
-                        )
-                        ParamSliderRow(
-                            "Range",
-                            value: bind(settings.gate.rangeDB, uid: uid, store: store,
-                                        keyPath: \.gate.rangeDB),
-                            range: -80...0,
-                            format: { $0 <= -79.5 ? "Mute" : formatDB($0) },
-                            enabled: on
-                        )
-                        ParamSliderRow(
-                            "Attack",
-                            value: bind(settings.gate.attackMS, uid: uid, store: store,
-                                        keyPath: \.gate.attackMS),
-                            range: 0.1...50,
-                            format: { formatMS($0) },
-                            enabled: on
-                        )
-                        ParamSliderRow(
-                            "Hold",
-                            value: bind(settings.gate.holdMS, uid: uid, store: store,
-                                        keyPath: \.gate.holdMS),
-                            range: 0...500,
-                            format: { formatMS($0) },
-                            enabled: on
-                        )
-                        ParamSliderRow(
-                            "Release",
-                            value: bind(settings.gate.releaseMS, uid: uid, store: store,
-                                        keyPath: \.gate.releaseMS),
-                            range: 5...2000,
-                            format: { formatMS($0) },
-                            enabled: on
+            VStack(spacing: 12) {
+                HStack(alignment: .top, spacing: 4) {
+                    ForEach(EffectKind.allCases) { kind in
+                        EffectCircleButton(
+                            kind: kind,
+                            isOn: settings[keyPath: kind.enabledKeyPath],
+                            isSelected: selected == kind,
+                            onToggle: {
+                                store.update(settings.deviceUID) {
+                                    $0[keyPath: kind.enabledKeyPath].toggle()
+                                }
+                            },
+                            onSelect: {
+                                withAnimation(.easeInOut(duration: 0.15)) {
+                                    selected = (selected == kind) ? nil : kind
+                                }
+                            }
                         )
                     }
+                }
+
+                if let kind = selected {
+                    Divider().background(Theme.border)
+                    EffectParameters(
+                        kind: kind,
+                        settings: settings,
+                        meterSource: meterSource,
+                        store: store
+                    )
                 }
             }
         }
     }
 }
 
-// MARK: - CompressorPanel
+// MARK: - EffectParameters
 
-struct CompressorPanel: View {
+struct EffectParameters: View {
+    let kind: EffectKind
     let settings: ChannelSettings
     @ObservedObject var meterSource: ChannelMeterSource
     @ObservedObject var store: ParameterStore
-    @State private var expanded = false
 
     private var uid: String { settings.deviceUID }
-    private var on: Bool { settings.compressorEnabled }
+    private var on: Bool { settings[keyPath: kind.enabledKeyPath] }
 
     var body: some View {
-        CardSection {
-            VStack(spacing: 8) {
-                EffectHeader(
-                    title: "Compressor",
-                    isEnabled: on,
-                    isExpanded: expanded,
-                    onToggleEnabled: { store.update(uid) { $0.compressorEnabled.toggle() } },
-                    onToggleExpand: { withAnimation(.easeInOut(duration: 0.15)) { expanded.toggle() } }
-                )
-
-                if expanded {
-                    VStack(spacing: 6) {
-                        LiveGRStrip(source: meterSource, stage: .compressor)
-
-                        ParamSliderRow(
-                            "Threshold",
-                            value: bind(settings.compressor.thresholdDB, uid: uid, store: store,
-                                        keyPath: \.compressor.thresholdDB),
-                            range: -60...0,
-                            format: { formatDB($0) },
-                            enabled: on
-                        )
-                        ParamSliderRow(
-                            "Ratio",
-                            value: bind(settings.compressor.ratio, uid: uid, store: store,
-                                        keyPath: \.compressor.ratio),
-                            range: 1...20,
-                            format: { formatRatio($0) },
-                            enabled: on
-                        )
-                        ParamSliderRow(
-                            "Attack",
-                            value: bind(settings.compressor.attackMS, uid: uid, store: store,
-                                        keyPath: \.compressor.attackMS),
-                            range: 0.1...200,
-                            format: { formatMS($0) },
-                            enabled: on
-                        )
-                        ParamSliderRow(
-                            "Release",
-                            value: bind(settings.compressor.releaseMS, uid: uid, store: store,
-                                        keyPath: \.compressor.releaseMS),
-                            range: 10...2000,
-                            format: { formatMS($0) },
-                            enabled: on
-                        )
-                        ParamSliderRow(
-                            "Makeup",
-                            value: bind(settings.compressor.makeupDB, uid: uid, store: store,
-                                        keyPath: \.compressor.makeupDB),
-                            range: 0...24,
-                            format: { formatDB($0) },
-                            enabled: on
-                        )
-                        ParamSliderRow(
-                            "Knee",
-                            value: bind(settings.compressor.kneeDB, uid: uid, store: store,
-                                        keyPath: \.compressor.kneeDB),
-                            range: 0...12,
-                            format: { formatDB($0) },
-                            enabled: on
-                        )
-                    }
-                }
+        VStack(spacing: 6) {
+            switch kind {
+            case .gate:       gate
+            case .compressor: compressor
+            case .exciter:    exciter
+            case .bigBottom:  bigBottom
             }
         }
     }
-}
 
-// MARK: - ExciterPanel
+    // MARK: Noise Gate
 
-struct ExciterPanel: View {
-    let settings: ChannelSettings
-    @ObservedObject var store: ParameterStore
-    @State private var expanded = false
+    @ViewBuilder private var gate: some View {
+        LiveGRStrip(source: meterSource, stage: .gate)
 
-    private var uid: String { settings.deviceUID }
-    private var on: Bool { settings.exciterEnabled }
-
-    var body: some View {
-        CardSection {
-            VStack(spacing: 8) {
-                EffectHeader(
-                    title: "Aural Exciter",
-                    isEnabled: on,
-                    isExpanded: expanded,
-                    onToggleEnabled: { store.update(uid) { $0.exciterEnabled.toggle() } },
-                    onToggleExpand: { withAnimation(.easeInOut(duration: 0.15)) { expanded.toggle() } }
-                )
-
-                if expanded {
-                    VStack(spacing: 6) {
-                        ParamSliderRow(
-                            "Amount",
-                            value: bind(settings.exciter.amount, uid: uid, store: store,
-                                        keyPath: \.exciter.amount),
-                            range: 0...1,
-                            format: { String(format: "%.0f %%", $0 * 100) },
-                            enabled: on
-                        )
-                        ParamSliderRow(
-                            "Frequency",
-                            value: bind(settings.exciter.frequency, uid: uid, store: store,
-                                        keyPath: \.exciter.frequency),
-                            range: 1000...12000,
-                            format: { formatHz($0) },
-                            enabled: on
-                        )
-                        ParamSliderRow(
-                            "Drive",
-                            value: bind(settings.exciter.drive, uid: uid, store: store,
-                                        keyPath: \.exciter.drive),
-                            range: 0...1,
-                            format: { String(format: "%.0f %%", $0 * 100) },
-                            enabled: on
-                        )
-                    }
-                }
-            }
-        }
+        ParamSliderRow(
+            "Threshold",
+            value: bind(settings.gate.thresholdDB, uid: uid, store: store,
+                        keyPath: \.gate.thresholdDB),
+            range: -80...0,
+            format: { formatDB($0) },
+            enabled: on
+        )
+        ParamSliderRow(
+            "Hysteresis",
+            value: bind(settings.gate.hysteresisDB, uid: uid, store: store,
+                        keyPath: \.gate.hysteresisDB),
+            range: 0...20,
+            format: { String(format: "%.1f dB", $0) },
+            enabled: on
+        )
+        ParamSliderRow(
+            "Range",
+            value: bind(settings.gate.rangeDB, uid: uid, store: store,
+                        keyPath: \.gate.rangeDB),
+            range: -80...0,
+            format: { $0 <= -79.5 ? "Mute" : formatDB($0) },
+            enabled: on
+        )
+        ParamSliderRow(
+            "Attack",
+            value: bind(settings.gate.attackMS, uid: uid, store: store,
+                        keyPath: \.gate.attackMS),
+            range: 0.1...50,
+            format: { formatMS($0) },
+            enabled: on
+        )
+        ParamSliderRow(
+            "Hold",
+            value: bind(settings.gate.holdMS, uid: uid, store: store,
+                        keyPath: \.gate.holdMS),
+            range: 0...500,
+            format: { formatMS($0) },
+            enabled: on
+        )
+        ParamSliderRow(
+            "Release",
+            value: bind(settings.gate.releaseMS, uid: uid, store: store,
+                        keyPath: \.gate.releaseMS),
+            range: 5...2000,
+            format: { formatMS($0) },
+            enabled: on
+        )
     }
-}
 
-// MARK: - BigBottomPanel
+    // MARK: Compressor
 
-struct BigBottomPanel: View {
-    let settings: ChannelSettings
-    @ObservedObject var store: ParameterStore
-    @State private var expanded = false
+    @ViewBuilder private var compressor: some View {
+        LiveGRStrip(source: meterSource, stage: .compressor)
 
-    private var uid: String { settings.deviceUID }
-    private var on: Bool { settings.bigBottomEnabled }
+        ParamSliderRow(
+            "Threshold",
+            value: bind(settings.compressor.thresholdDB, uid: uid, store: store,
+                        keyPath: \.compressor.thresholdDB),
+            range: -60...0,
+            format: { formatDB($0) },
+            enabled: on
+        )
+        ParamSliderRow(
+            "Ratio",
+            value: bind(settings.compressor.ratio, uid: uid, store: store,
+                        keyPath: \.compressor.ratio),
+            range: 1...20,
+            format: { formatRatio($0) },
+            enabled: on
+        )
+        ParamSliderRow(
+            "Attack",
+            value: bind(settings.compressor.attackMS, uid: uid, store: store,
+                        keyPath: \.compressor.attackMS),
+            range: 0.1...200,
+            format: { formatMS($0) },
+            enabled: on
+        )
+        ParamSliderRow(
+            "Release",
+            value: bind(settings.compressor.releaseMS, uid: uid, store: store,
+                        keyPath: \.compressor.releaseMS),
+            range: 10...2000,
+            format: { formatMS($0) },
+            enabled: on
+        )
+        ParamSliderRow(
+            "Makeup",
+            value: bind(settings.compressor.makeupDB, uid: uid, store: store,
+                        keyPath: \.compressor.makeupDB),
+            range: 0...24,
+            format: { formatDB($0) },
+            enabled: on
+        )
+        ParamSliderRow(
+            "Knee",
+            value: bind(settings.compressor.kneeDB, uid: uid, store: store,
+                        keyPath: \.compressor.kneeDB),
+            range: 0...12,
+            format: { formatDB($0) },
+            enabled: on
+        )
+    }
 
-    var body: some View {
-        CardSection {
-            VStack(spacing: 8) {
-                EffectHeader(
-                    title: "Big Bottom",
-                    isEnabled: on,
-                    isExpanded: expanded,
-                    onToggleEnabled: { store.update(uid) { $0.bigBottomEnabled.toggle() } },
-                    onToggleExpand: { withAnimation(.easeInOut(duration: 0.15)) { expanded.toggle() } }
-                )
+    // MARK: Aural Exciter
 
-                if expanded {
-                    VStack(spacing: 6) {
-                        ParamSliderRow(
-                            "Amount",
-                            value: bind(settings.bigBottom.amount, uid: uid, store: store,
-                                        keyPath: \.bigBottom.amount),
-                            range: 0...1,
-                            format: { String(format: "%.0f %%", $0 * 100) },
-                            enabled: on
-                        )
-                        ParamSliderRow(
-                            "Frequency",
-                            value: bind(settings.bigBottom.frequency, uid: uid, store: store,
-                                        keyPath: \.bigBottom.frequency),
-                            range: 40...400,
-                            format: { formatHz($0) },
-                            enabled: on
-                        )
-                        ParamSliderRow(
-                            "Drive",
-                            value: bind(settings.bigBottom.drive, uid: uid, store: store,
-                                        keyPath: \.bigBottom.drive),
-                            range: 0...1,
-                            format: { String(format: "%.0f %%", $0 * 100) },
-                            enabled: on
-                        )
-                    }
-                }
-            }
-        }
+    @ViewBuilder private var exciter: some View {
+        ParamSliderRow(
+            "Amount",
+            value: bind(settings.exciter.amount, uid: uid, store: store,
+                        keyPath: \.exciter.amount),
+            range: 0...1,
+            format: { String(format: "%.0f %%", $0 * 100) },
+            enabled: on
+        )
+        ParamSliderRow(
+            "Frequency",
+            value: bind(settings.exciter.frequency, uid: uid, store: store,
+                        keyPath: \.exciter.frequency),
+            range: 1000...12000,
+            format: { formatHz($0) },
+            enabled: on
+        )
+        ParamSliderRow(
+            "Drive",
+            value: bind(settings.exciter.drive, uid: uid, store: store,
+                        keyPath: \.exciter.drive),
+            range: 0...1,
+            format: { String(format: "%.0f %%", $0 * 100) },
+            enabled: on
+        )
+    }
+
+    // MARK: Big Bottom
+
+    @ViewBuilder private var bigBottom: some View {
+        ParamSliderRow(
+            "Amount",
+            value: bind(settings.bigBottom.amount, uid: uid, store: store,
+                        keyPath: \.bigBottom.amount),
+            range: 0...1,
+            format: { String(format: "%.0f %%", $0 * 100) },
+            enabled: on
+        )
+        ParamSliderRow(
+            "Frequency",
+            value: bind(settings.bigBottom.frequency, uid: uid, store: store,
+                        keyPath: \.bigBottom.frequency),
+            range: 40...400,
+            format: { formatHz($0) },
+            enabled: on
+        )
+        ParamSliderRow(
+            "Drive",
+            value: bind(settings.bigBottom.drive, uid: uid, store: store,
+                        keyPath: \.bigBottom.drive),
+            range: 0...1,
+            format: { String(format: "%.0f %%", $0 * 100) },
+            enabled: on
+        )
     }
 }

@@ -10,19 +10,26 @@ private struct GainStepButton: View {
     var body: some View {
         Button(action: action) {
             Image(systemName: symbol)
-                .font(.system(size: 12, weight: .semibold))
+                .font(.system(size: 15, weight: .semibold))
                 .foregroundColor(Theme.textPrimary)
-                .frame(width: 28, height: 28)
-                .background(RoundedRectangle(cornerRadius: Theme.radiusSmall).fill(Theme.raised))
+                .frame(width: 36, height: 36)
+                .background(RoundedRectangle(cornerRadius: Theme.radiusMedium).fill(Theme.raised))
         }
         .buttonStyle(.plain)
         .accessibilityLabel(Text(label))
     }
 }
 
-// MARK: - GainRow
+// MARK: - GainBlock
 
-private struct GainRow: View {
+/// Gain as the headline control of the pane: a large readout flanked by the
+/// step buttons, with the slider demoted underneath for coarse moves.
+///
+/// It was previously one more label-slider-value row, indistinguishable from
+/// Pad, HPF frequency and the six compressor parameters — despite being the
+/// one control that is touched daily and the one whose value has to be
+/// readable from across the desk.
+private struct GainBlock: View {
     let settings: ChannelSettings
     @ObservedObject var store: ParameterStore
 
@@ -30,35 +37,58 @@ private struct GainRow: View {
     private let gainRange: ClosedRange<Float> = -20...40
 
     var body: some View {
-        HStack(spacing: 8) {
+        VStack(spacing: 8) {
             Text("Gain")
                 .font(Theme.labelFont)
                 .foregroundColor(Theme.textSecondary)
-                .frame(width: 36, alignment: .leading)
 
-            GainStepButton(symbol: "minus", label: "Decrease gain") {
-                let next = max(gainRange.lowerBound, settings.gainDB - stepDB)
-                store.update(settings.deviceUID) { $0.gainDB = next }
+            HStack(spacing: 10) {
+                Spacer(minLength: 0)
+
+                GainStepButton(symbol: "minus", label: "Gain verringern") {
+                    let next = max(gainRange.lowerBound, settings.gainDB - stepDB)
+                    store.update(settings.deviceUID) { $0.gainDB = next }
+                }
+
+                VStack(spacing: 0) {
+                    // Fixed width and a monospaced face: the readout changes
+                    // while a step button is held, and a proportional font
+                    // would shuffle both buttons sideways under the pointer.
+                    Text(String(format: "%+.1f", settings.gainDB))
+                        .font(.system(size: 26, weight: .semibold, design: .monospaced))
+                        .foregroundColor(Theme.textPrimary)
+                        .frame(width: 108)
+                    Text("dB")
+                        .font(Theme.captionFont)
+                        .foregroundColor(Theme.textSecondary)
+                }
+                .padding(.vertical, 5)
+                .background(RoundedRectangle(cornerRadius: Theme.radiusMedium).fill(Theme.bg))
+
+                GainStepButton(symbol: "plus", label: "Gain erhöhen") {
+                    let next = min(gainRange.upperBound, settings.gainDB + stepDB)
+                    store.update(settings.deviceUID) { $0.gainDB = next }
+                }
+
+                Spacer(minLength: 0)
             }
 
-            ValueText(text: formatDB(settings.gainDB, decimals: 1), width: 64, alignment: .center)
-
-            GainStepButton(symbol: "plus", label: "Increase gain") {
-                let next = min(gainRange.upperBound, settings.gainDB + stepDB)
-                store.update(settings.deviceUID) { $0.gainDB = next }
-            }
-
+            // Deliberately not full width. Stretched across the pane it sat
+            // exactly where RØDE Connect puts a level meter, and a solid red
+            // bar growing from the left edge reads as a level, not a control.
+            // Kept to the width of the buttons above it so it reads as part of
+            // the same group. Precision is unaffected: the ± buttons are the
+            // exact route, this is the coarse one.
             Slider(
                 value: bind(settings.gainDB, uid: settings.deviceUID, store: store,
                             keyPath: \.gainDB),
                 in: gainRange
             )
             .tint(Theme.accent)
-            .frame(maxWidth: .infinity)
+            .frame(maxWidth: 320)
             .accessibilityLabel(Text("Gain"))
             .accessibilityValue(Text(formatDB(settings.gainDB, decimals: 1)))
         }
-        .frame(height: 30)
     }
 }
 
@@ -186,6 +216,8 @@ struct MicDetailView: View {
     @ObservedObject var meterSource: ChannelMeterSource
     @ObservedObject var store: ParameterStore
 
+    @State private var selectedEffect: EffectKind?
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 12) {
@@ -209,8 +241,8 @@ struct MicDetailView: View {
 
                 // Gain controls
                 CardSection {
-                    VStack(spacing: 8) {
-                        GainRow(settings: settings, store: store)
+                    VStack(spacing: 10) {
+                        GainBlock(settings: settings, store: store)
                         Divider().background(Theme.border)
                         PadRow(settings: settings, store: store)
                         Divider().background(Theme.border)
@@ -218,11 +250,13 @@ struct MicDetailView: View {
                     }
                 }
 
-                // Effect panels
-                GatePanel(settings: settings, meterSource: meterSource, store: store)
-                CompressorPanel(settings: settings, meterSource: meterSource, store: store)
-                ExciterPanel(settings: settings, store: store)
-                BigBottomPanel(settings: settings, store: store)
+                // Effects
+                EffectSection(
+                    settings: settings,
+                    meterSource: meterSource,
+                    store: store,
+                    selected: $selectedEffect
+                )
             }
             .padding(14)
         }
