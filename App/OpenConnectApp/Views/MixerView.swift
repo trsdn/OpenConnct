@@ -274,13 +274,13 @@ struct MixerView: View {
                         isSelected: selectedUID == ch.deviceUID,
                         onSelect: { onSelectChannel(ch.deviceUID) }
                     )
-                    // Strips grow with the window, but only so far. Letting
-                    // them stretch without limit produced a 767pt fader on a
-                    // tall window, which is neither usable nor sensible; a
-                    // fader only needs enough travel to be set precisely. The
-                    // minimum is what the labels, meter and buttons need to
-                    // stay legible.
-                    .frame(minHeight: 280, maxHeight: 460)
+                    // Deliberately a fixed height, not a flexible one. Meter
+                    // redraw cost scales with the drawn area, and letting the
+                    // strips stretch to 460pt took idle CPU from 6% to 16% on
+                    // three channels. The black band the user saw came from
+                    // the column not filling, not from the strips being short,
+                    // so the strips stay put and the column absorbs the space.
+                    .frame(height: 280)
                 }
             }
             .padding(12)

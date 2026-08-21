@@ -96,6 +96,24 @@ struct ChannelMeters: Equatable {
     var gateReductionDB: Float = 0
     var compressorReductionDB: Float = 0
     var connected: Bool = false
+
+    /// A copy rounded to the smallest step a reader can actually follow.
+    ///
+    /// The raw values wander in the third decimal place even in a silent room,
+    /// so comparing them is never equal and every tick pushes a UI update for a
+    /// change nobody can see. Rounding to 0.5 dB first means a quiet channel
+    /// settles and stops redrawing, and the numbers stop flickering.
+    func roundedForDisplay() -> ChannelMeters {
+        func q(_ v: Float) -> Float { (v * 2).rounded() / 2 }
+        return ChannelMeters(
+            inputPeakDB: q(inputPeakDB),
+            inputRMSDB: q(inputRMSDB),
+            outputPeakDB: q(outputPeakDB),
+            outputRMSDB: q(outputRMSDB),
+            gateReductionDB: q(gateReductionDB),
+            compressorReductionDB: q(compressorReductionDB),
+            connected: connected)
+    }
 }
 
 /// Diagnostics surfaced by the clock/drift engine. This is the evidence that the
