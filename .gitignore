@@ -1,0 +1,10 @@
+dist/
+build/
+*.app
+*.driver
+*.dmg
+*.pkg
+.release.env
+.build/
+.DS_Store
+*.xcuserdatad
