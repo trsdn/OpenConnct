@@ -419,8 +419,10 @@ let ocOutputRenderCallback: AURenderCallback = {
         channel.pointee.faderGain = end
     }
 
-    // 3. Publish the mono mix to every output channel. Both mics are summed to
-    // a single centre image, which is what a stereo "OpenConnect Mic" should be.
+    // 3. Publish the mix. The virtual device is stereo (kChannelCount == 2 in
+    // the driver) because that is what conferencing apps expect, but both mics
+    // are mono sources, so the same summed signal is written to every output
+    // channel: a centre image on a stereo device, not a mono device.
     for bufferIndex in 0..<buffers.count {
         guard let data = buffers[bufferIndex].mData else { continue }
         let out = data.assumingMemoryBound(to: Float.self)

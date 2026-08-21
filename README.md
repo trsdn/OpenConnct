@@ -68,6 +68,12 @@ make install-driver
 make uninstall-driver
 ```
 
+> **First time installing?** Follow **[docs/PHASE1-VERIFICATION.md](docs/PHASE1-VERIFICATION.md)**
+> instead of these commands alone. It is a step-by-step runbook for the end-to-end hardware test —
+> what to check at each stage, how to tell a real failure from expected behaviour, and a guaranteed
+> rollback if anything goes wrong. Note that `sudo killall -9 coreaudiod` briefly interrupts audio
+> for **every** application on the system, so leave any call or recording first.
+
 ---
 
 ## Using it
@@ -396,7 +402,7 @@ macOS requires explicit microphone permission for any app that captures audio. O
 
 - **Hardware gain/pad/HPF control over RØDE's proprietary USB HID protocol** is explicitly out of scope for v1. The `App/OpenConnectApp/Hardware/` directory is a stub. In v1, Gain, Pad, and HPF are all implemented in software DSP. A future phase may add RØDE HID control to reduce headroom loss before the ADC.
 - **More than 8 simultaneous channels.** The current limit is `kMaxChannels = 8`, which is adequate for the reference hardware. Increasing it is a reallocation-only change.
-- **Per-output routing.** Currently all channels are summed to a mono centre image. Stereo or multi-bus output is not planned.
+- **Per-source stereo panning and multi-bus routing.** "OpenConnect Mic" is a **stereo** device (2 channels, 48 kHz, Float32) because that is what conferencing and streaming apps expect. Both mics are mono sources, so the mix is summed and written identically to the left and right channels — a centre image on a stereo device. Panning individual mics, or exposing each mic as its own output bus, is not planned.
 
 ---
 

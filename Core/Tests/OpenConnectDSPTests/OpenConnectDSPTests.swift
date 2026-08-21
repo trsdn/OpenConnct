@@ -415,7 +415,7 @@ final class OpenConnectDSPTests: XCTestCase {
         var storage = Array(repeating: Float(0), count: 8)
         var ring = oc_ring_buffer()
         XCTAssertEqual(storage.withUnsafeMutableBufferPointer { oc_ring_buffer_init(&ring, $0.baseAddress!, 8) }, 1)
-        var input: [Float] = [0.1, 0.2]
+        let input: [Float] = [0.1, 0.2]
         _ = input.withUnsafeBufferPointer { oc_ring_buffer_write(&ring, $0.baseAddress!, UInt32(input.count)) }
         var r = oc_resampler()
         oc_resampler_init(&r, 1.0)
