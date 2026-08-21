@@ -82,55 +82,125 @@ final class OpenConnectDSPTests: XCTestCase {
     func testGateStaysClosedBelowThreshold() {
         var g = oc_gate()
         oc_gate_init(&g, Double(sr))
-        oc_gate_configure(&g, -30, 10, 5, 50, 6)
-        for _ in 0..<4_000 { _ = oc_gate_process_sample(&g, Analysis.linear(-45)) }
+        oc_gate_configure(&g, -30, 10, 5, 50, 6, -120)
+        for x in gateTone(Analysis.linear(-45), count: 4_000) { _ = oc_gate_process_sample(&g, x) }
         XCTAssertEqual(oc_gate_current_state(&g), OC_GATE_CLOSED)
         XCTAssertLessThan(oc_gate_gain_reduction_db(&g), -80)
+    }
+
+    /// The detector is high-passed and envelope-followed, so it must be fed a
+    /// real waveform. A DC step carries no energy above the key filter and is
+    /// correctly ignored -- feeding one here would test nothing.
+    private func gateTone(_ amplitude: Float, count: Int) -> [Float] {
+        SignalGenerator.sine(frequency: 1_000, sampleRate: sr, count: count, amplitude: amplitude)
     }
 
     func testGateOpensAboveThreshold() {
         var g = oc_gate()
         oc_gate_init(&g, Double(sr))
-        oc_gate_configure(&g, -30, 10, 5, 50, 6)
-        for _ in 0..<Int(sr * 0.1) { _ = oc_gate_process_sample(&g, Analysis.linear(-12)) }
+        oc_gate_configure(&g, -30, 10, 5, 50, 6, -120)
+        for x in gateTone(0.25, count: Int(sr * 0.1)) { _ = oc_gate_process_sample(&g, x) }
         XCTAssertTrue(oc_gate_current_state(&g) == OC_GATE_OPEN || oc_gate_current_state(&g) == OC_GATE_ATTACKING)
         XCTAssertGreaterThan(oc_gate_gain_reduction_db(&g), -0.2)
+    }
+
+    /// Regression for the original defect: the detector ran on the raw sample
+    /// magnitude, so |x| collapsed at every zero crossing and the state machine
+    /// thrashed out of OPEN once per cycle on any periodic signal.
+    func testGateStaysOpenAcrossZeroCrossings() {
+        var g = oc_gate()
+        oc_gate_init(&g, Double(sr))
+        oc_gate_configure(&g, -30, 5, 5, 50, 6, -120)
+        for x in gateTone(0.25, count: Int(sr * 0.05)) { _ = oc_gate_process_sample(&g, x) }
+        var transitions = 0
+        var previous = oc_gate_current_state(&g)
+        for x in gateTone(0.25, count: Int(sr * 0.2)) {
+            _ = oc_gate_process_sample(&g, x)
+            let state = oc_gate_current_state(&g)
+            if state != previous { transitions += 1; previous = state }
+        }
+        XCTAssertEqual(transitions, 0)
+    }
+
+    /// Regression for the original defect: the detector was the raw sample
+    /// magnitude, so a single click well above the threshold reopened the gate
+    /// and the hold time kept it open, even though the signal it sat on was
+    /// 25 dB below the threshold. An envelope follower ignores an isolated
+    /// sample because it carries almost no energy.
+    func testGateStaysClosedWhenQuietNoiseContainsIsolatedClicks() {
+        var g = oc_gate()
+        oc_gate_init(&g, Double(sr))
+        oc_gate_configure(&g, -30, 5, 5, 50, 6, -120)
+        var seed: UInt64 = 0x5DEECE66D
+        var clicks = 0
+        for i in 0..<Int(sr) {
+            seed = seed &* 6_364_136_223_846_793_005 &+ 1_442_695_040_888_963_407
+            let uniform = Float(Int32(truncatingIfNeeded: seed >> 32)) / Float(Int32.max)
+            var x = uniform * Analysis.linear(-55)
+            if i % 5_000 == 0 {
+                x += Analysis.linear(-20)
+                clicks += 1
+            }
+            _ = oc_gate_process_sample(&g, x)
+        }
+        XCTAssertGreaterThan(clicks, 5, "test signal must contain clicks above the threshold")
+        XCTAssertEqual(oc_gate_current_state(&g), OC_GATE_CLOSED)
+    }
+
+    /// The range parameter attenuates rather than muting, so the room ducks
+    /// instead of vanishing.
+    func testGateRangeLimitsAttenuation() {
+        var g = oc_gate()
+        oc_gate_init(&g, Double(sr))
+        oc_gate_configure(&g, -30, 5, 5, 50, 6, -20)
+        for x in gateTone(0.0005, count: Int(sr * 0.5)) { _ = oc_gate_process_sample(&g, x) }
+        XCTAssertEqual(oc_gate_current_state(&g), OC_GATE_CLOSED)
+        XCTAssertEqual(oc_gate_gain_reduction_db(&g), -20, accuracy: 0.5)
     }
 
     func testGateMeasuredAttackTime() {
         var g = oc_gate()
         oc_gate_init(&g, Double(sr))
-        oc_gate_configure(&g, -30, 10, 5, 50, 6)
+        oc_gate_configure(&g, -30, 10, 5, 50, 6, -120)
+        var opened = -1
         var crossed = -1
-        for i in 0..<Int(sr) {
-            let y = oc_gate_process_sample(&g, 0.2)
-            if crossed < 0 && y / 0.2 > 0.63 { crossed = i }
+        for (i, x) in gateTone(0.2, count: Int(sr)).enumerated() {
+            let y = oc_gate_process_sample(&g, x)
+            if opened < 0, oc_gate_current_state(&g) == OC_GATE_ATTACKING { opened = i }
+            if opened >= 0, crossed < 0, abs(x) > 1e-9, y / x > 0.63 { crossed = i }
         }
-        XCTAssertEqual(Float(crossed) / sr, 0.010, accuracy: 0.006)
+        XCTAssertGreaterThanOrEqual(opened, 0)
+        XCTAssertEqual(Float(crossed - opened) / sr, 0.010, accuracy: 0.006)
     }
 
     func testGateMeasuredReleaseTime() {
         var g = oc_gate()
         oc_gate_init(&g, Double(sr))
-        oc_gate_configure(&g, -30, 10, 5, 50, 6)
-        for _ in 0..<Int(sr * 0.2) { _ = oc_gate_process_sample(&g, 0.2) }
+        oc_gate_configure(&g, -30, 10, 5, 50, 6, -120)
+        for x in gateTone(0.2, count: Int(sr * 0.2)) { _ = oc_gate_process_sample(&g, x) }
+        // Timed from the state transition, not from the input step: the
+        // detector's own release deliberately delays that transition.
+        var releaseStarted = -1
         var crossed = -1
-        for i in 0..<Int(sr) {
-            let y = oc_gate_process_sample(&g, 0.001)
-            if i > Int(0.005 * sr), crossed < 0, y / 0.001 < 0.37 { crossed = i }
+        for (i, x) in gateTone(0.001, count: Int(sr)).enumerated() {
+            let y = oc_gate_process_sample(&g, x)
+            if releaseStarted < 0, oc_gate_current_state(&g) == OC_GATE_RELEASING { releaseStarted = i }
+            if releaseStarted >= 0, crossed < 0, abs(x) > 1e-9, abs(y / x) < 0.37 { crossed = i }
         }
-        XCTAssertEqual(Float(crossed) / sr, 0.055, accuracy: 0.025)
+        XCTAssertGreaterThanOrEqual(releaseStarted, 0)
+        XCTAssertEqual(Float(crossed - releaseStarted) / sr, 0.050, accuracy: 0.025)
     }
 
     func testGateHysteresisPreventsChatter() {
         var g = oc_gate()
         oc_gate_init(&g, Double(sr))
-        oc_gate_configure(&g, -30, 2, 0, 20, 6)
+        oc_gate_configure(&g, -30, 2, 0, 20, 6, -120)
         var transitions = 0
         var previous = oc_gate_current_state(&g)
+        let carrier = gateTone(1, count: 20_000)
         for i in 0..<20_000 {
             let db: Float = i % 2 == 0 ? -31 : -32
-            _ = oc_gate_process_sample(&g, Analysis.linear(db))
+            _ = oc_gate_process_sample(&g, carrier[i] * Analysis.linear(db))
             let state = oc_gate_current_state(&g)
             if state != previous {
                 transitions += 1
@@ -143,14 +213,20 @@ final class OpenConnectDSPTests: XCTestCase {
     func testGateHoldTimeIsHonoured() {
         var g = oc_gate()
         oc_gate_init(&g, Double(sr))
-        oc_gate_configure(&g, -30, 1, 40, 20, 6)
-        for _ in 0..<Int(sr * 0.05) { _ = oc_gate_process_sample(&g, 0.2) }
+        oc_gate_configure(&g, -30, 1, 40, 20, 6, -120)
+        for x in gateTone(0.2, count: Int(sr * 0.05)) { _ = oc_gate_process_sample(&g, x) }
+        // Hold is timed from the moment the detector actually reports the drop,
+        // i.e. from the OPEN -> HOLDING transition.
+        var holdStarted = -1
         var releaseStarted = -1
-        for i in 0..<Int(sr * 0.2) {
-            _ = oc_gate_process_sample(&g, 0.001)
-            if releaseStarted < 0 && oc_gate_current_state(&g) == OC_GATE_RELEASING { releaseStarted = i }
+        for (i, x) in gateTone(0.001, count: Int(sr * 0.4)).enumerated() {
+            _ = oc_gate_process_sample(&g, x)
+            let state = oc_gate_current_state(&g)
+            if holdStarted < 0, state == OC_GATE_HOLDING { holdStarted = i }
+            if releaseStarted < 0, state == OC_GATE_RELEASING { releaseStarted = i }
         }
-        XCTAssertEqual(Float(releaseStarted) / sr, 0.040, accuracy: 0.005)
+        XCTAssertGreaterThanOrEqual(holdStarted, 0)
+        XCTAssertEqual(Float(releaseStarted - holdStarted) / sr, 0.040, accuracy: 0.005)
     }
 
     func testCompressorStaticCurve() {
@@ -223,6 +299,27 @@ final class OpenConnectDSPTests: XCTestCase {
         XCTAssertGreaterThan(highH2, lowH2 * 2)
     }
 
+    /// The original exciter fed a raw mic signal straight into tanh, which at
+    /// speech level sits in its linear region: measured distortion was 0.024%
+    /// and scaled linearly with input level, i.e. it was a shelving EQ, not a
+    /// harmonic generator. The side-chain is now normalised before the clipper,
+    /// so the harmonic content is both substantial and level-independent.
+    func testExciterHarmonicContentIsLevelIndependent() {
+        func secondHarmonicRatio(amplitude: Float) -> Float {
+            let input = SignalGenerator.sine(frequency: 5_000, sampleRate: sr, count: 96_000, amplitude: amplitude)
+            let wet = Array(processExciter(input, amount: 1.0, drive: 0.5)[48_000..<96_000])
+            let fundamental = Analysis.binMagnitude(wet, frequency: 5_000, sampleRate: sr)
+            let second = Analysis.binMagnitude(wet, frequency: 10_000, sampleRate: sr)
+            return second / fundamental
+        }
+
+        let quiet = secondHarmonicRatio(amplitude: Analysis.linear(-40))
+        let loud = secondHarmonicRatio(amplitude: Analysis.linear(-6))
+
+        XCTAssertGreaterThan(quiet, 0.005, "harmonics must be audible at normal speech level")
+        XCTAssertEqual(loud / quiet, 1, accuracy: 0.3, "harmonic content must not depend on input level")
+    }
+
     func testExciterZeroAmountIsDry() {
         let input = SignalGenerator.sine(frequency: 4_000, sampleRate: sr, count: 48_000, amplitude: 0.2)
         let dry = processExciter(input, amount: 0, drive: 2)
@@ -263,6 +360,29 @@ final class OpenConnectDSPTests: XCTestCase {
         let dry = processBigBottom(input, amount: 0, drive: 2)
         let wet = processBigBottom(input, amount: 0.8, drive: 2)
         XCTAssertGreaterThan(Analysis.binMagnitude(wet, frequency: 80, sampleRate: sr), Analysis.binMagnitude(dry, frequency: 80, sampleRate: sr))
+    }
+
+    /// The defining property of Big Bottom: the low band is lifted more when it
+    /// is quiet than when it is loud, so weight is added without the peak
+    /// meter moving. The original tanh saturator had no level dependence at
+    /// all -- it was a fixed, and at speech level inaudible, shelf.
+    func testBigBottomLiftsQuietBassMoreThanLoudBass() {
+        func lift(amplitude: Float) -> Float {
+            let input = SignalGenerator.sine(frequency: 80, sampleRate: sr, count: 96_000, amplitude: amplitude)
+            let dry = processBigBottom(input, amount: 0, drive: 0.5)
+            let wet = processBigBottom(input, amount: 1.0, drive: 0.5)
+            let tail = 48_000..<96_000
+            let dryMag = Analysis.binMagnitude(Array(dry[tail]), frequency: 80, sampleRate: sr)
+            let wetMag = Analysis.binMagnitude(Array(wet[tail]), frequency: 80, sampleRate: sr)
+            return 20 * log10(wetMag / dryMag)
+        }
+
+        let quiet = lift(amplitude: Analysis.linear(-40))
+        let loud = lift(amplitude: Analysis.linear(-6))
+
+        XCTAssertGreaterThan(quiet, 4, "quiet bass should be lifted by roughly the full mix amount")
+        XCTAssertGreaterThan(quiet - loud, 3, "the lift must fall away as the band gets louder")
+        XCTAssertLessThan(loud, quiet)
     }
 
     func testBigBottomLeavesHighBandMostlyUnchanged() {

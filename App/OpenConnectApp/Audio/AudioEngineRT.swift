@@ -79,6 +79,7 @@ struct ChannelParams {
     var gateHoldMS: Float = 80
     var gateReleaseMS: Float = 150
     var gateHysteresisDB: Float = 6
+    var gateRangeDB: Float = -60
 
     var compEnabled: Float = 0
     var compThresholdDB: Float = -18
@@ -288,18 +289,20 @@ func rtApplyParam(_ channel: UnsafeMutablePointer<ChannelRT>, _ paramID: UInt32,
             oc_hpf_mode(UInt32(max(0, min(3, channel.pointee.params.hpfMode)))),
             channel.pointee.params.hpfFrequency)
 
-    case OCParam.gateThresholdDB.rawValue...OCParam.gateHysteresisDB.rawValue:
+    case OCParam.gateThresholdDB.rawValue...OCParam.gateRangeDB.rawValue:
         switch selector {
         case OCParam.gateThresholdDB.rawValue: channel.pointee.params.gateThresholdDB = value
         case OCParam.gateAttackMS.rawValue: channel.pointee.params.gateAttackMS = value
         case OCParam.gateHoldMS.rawValue: channel.pointee.params.gateHoldMS = value
         case OCParam.gateReleaseMS.rawValue: channel.pointee.params.gateReleaseMS = value
-        default: channel.pointee.params.gateHysteresisDB = value
+        case OCParam.gateHysteresisDB.rawValue: channel.pointee.params.gateHysteresisDB = value
+        default: channel.pointee.params.gateRangeDB = value
         }
         let g = channel.pointee.params
         oc_gate_configure(
             &p.pointee.gate,
-            g.gateThresholdDB, g.gateAttackMS, g.gateHoldMS, g.gateReleaseMS, g.gateHysteresisDB)
+            g.gateThresholdDB, g.gateAttackMS, g.gateHoldMS, g.gateReleaseMS, g.gateHysteresisDB,
+            g.gateRangeDB)
 
     case OCParam.compThresholdDB.rawValue...OCParam.compKneeDB.rawValue:
         switch selector {

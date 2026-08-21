@@ -13,7 +13,12 @@ void oc_gate_init(oc_gate *gate, oc_sample_rate sr)
     gate->gain = 0.0f;
     gate->gain_reduction_db = -120.0f;
     gate->state = OC_GATE_CLOSED;
-    oc_gate_configure(gate, -50.0f, 5.0f, 20.0f, 80.0f, 3.0f);
+    gate->env = 0.0f;
+    oc_biquad_init_identity(&gate->key_hp);
+    oc_biquad_set_highpass(&gate->key_hp, sr, OC_GATE_KEY_HP_HZ, 0.707f);
+    gate->detector_attack_coeff = oc_coeff_for_ms(sr, OC_GATE_DETECTOR_ATTACK_MS);
+    gate->detector_release_coeff = oc_coeff_for_ms(sr, OC_GATE_DETECTOR_RELEASE_MS);
+    oc_gate_configure(gate, -50.0f, 5.0f, 20.0f, 80.0f, 3.0f, -120.0f);
 }
 
 void oc_gate_configure(
@@ -22,7 +27,8 @@ void oc_gate_configure(
     oc_float attack_ms,
     oc_float hold_ms,
     oc_float release_ms,
-    oc_float hysteresis_db)
+    oc_float hysteresis_db,
+    oc_float range_db)
 {
     gate->threshold_db = threshold_db;
     gate->close_threshold_db = threshold_db - fabsf(hysteresis_db);
@@ -33,11 +39,27 @@ void oc_gate_configure(
     gate->release_coeff = oc_coeff_for_ms(gate->sr, release_ms);
     gate->hold_samples = (uint32_t)(gate->sr * hold_ms * 0.001);
     gate->hold_remaining = 0;
+    /* Below -80 dB the difference is inaudible, so that end of the range is
+       treated as a full mute and the closed gate reaches exact zero. */
+    gate->range_db = oc_clampf(range_db, -120.0f, 0.0f);
+    gate->range_gain = gate->range_db <= -80.0f ? 0.0f : oc_db_to_linear(gate->range_db);
+
+    if (gate->state == OC_GATE_CLOSED) {
+        gate->gain = gate->range_gain;
+    }
 }
 
 oc_float oc_gate_process_sample(oc_gate *gate, oc_float input)
 {
-    oc_float input_db = oc_linear_to_db(fabsf(input));
+    /* The detector runs on a high-passed, envelope-followed copy of the input.
+       Driving the state machine from the raw sample magnitude made a single
+       noise peak reopen the gate and made |x| collapse at every zero crossing. */
+    oc_float key = oc_biquad_process_sample(&gate->key_hp, input);
+    oc_float rectified = fabsf(key);
+    oc_float detector_coeff = rectified > gate->env ? gate->detector_attack_coeff : gate->detector_release_coeff;
+    gate->env = oc_slew(gate->env, rectified, detector_coeff);
+
+    oc_float input_db = oc_linear_to_db(gate->env);
 
     switch (gate->state) {
     case OC_GATE_CLOSED:
@@ -71,14 +93,14 @@ oc_float oc_gate_process_sample(oc_gate *gate, oc_float input)
     case OC_GATE_RELEASING:
         if (input_db >= gate->threshold_db) {
             gate->state = OC_GATE_ATTACKING;
-        } else if (gate->gain < 0.00001f) {
-            gate->gain = 0.0f;
+        } else if (gate->gain <= gate->range_gain + 1.0e-6f) {
+            gate->gain = gate->range_gain;
             gate->state = OC_GATE_CLOSED;
         }
         break;
     }
 
-    oc_float target = 0.0f;
+    oc_float target = gate->range_gain;
 
     if (gate->state == OC_GATE_ATTACKING || gate->state == OC_GATE_OPEN || gate->state == OC_GATE_HOLDING) {
         target = 1.0f;
@@ -91,8 +113,8 @@ oc_float oc_gate_process_sample(oc_gate *gate, oc_float input)
         gate->gain = 1.0f;
     }
 
-    if (target == 0.0f && gate->gain < 0.00001f) {
-        gate->gain = 0.0f;
+    if (target == gate->range_gain && gate->gain <= gate->range_gain + 1.0e-6f) {
+        gate->gain = gate->range_gain;
     }
 
     gate->gain_reduction_db = oc_linear_to_db(fmaxf(gate->gain, 1.0e-6f));
@@ -109,6 +131,11 @@ void oc_gate_process_block(oc_gate *gate, const oc_float *in, oc_float *out, uin
 oc_float oc_gate_gain_reduction_db(const oc_gate *gate)
 {
     return gate->gain_reduction_db;
+}
+
+oc_float oc_gate_detector_db(const oc_gate *gate)
+{
+    return oc_linear_to_db(gate->env);
 }
 
 oc_gate_state oc_gate_current_state(const oc_gate *gate)

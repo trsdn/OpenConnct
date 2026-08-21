@@ -98,6 +98,14 @@ struct GatePanel: View {
                             enabled: on
                         )
                         ParamSliderRow(
+                            "Range",
+                            value: bind(settings.gate.rangeDB, uid: uid, store: store,
+                                        keyPath: \.gate.rangeDB),
+                            range: -80...0,
+                            format: { $0 <= -79.5 ? "Mute" : formatDB($0) },
+                            enabled: on
+                        )
+                        ParamSliderRow(
                             "Attack",
                             value: bind(settings.gate.attackMS, uid: uid, store: store,
                                         keyPath: \.gate.attackMS),

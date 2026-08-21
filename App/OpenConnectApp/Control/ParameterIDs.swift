@@ -19,6 +19,7 @@ enum OCParam: UInt32 {
     case gateHoldMS = 13
     case gateReleaseMS = 14
     case gateHysteresisDB = 15
+    case gateRangeDB = 16
 
     case compressorEnabled = 20
     case compThresholdDB = 21

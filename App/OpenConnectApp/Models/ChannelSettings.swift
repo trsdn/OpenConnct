@@ -22,9 +22,29 @@ enum HPFMode: Int, Codable, CaseIterable, Identifiable {
 struct GateSettings: Codable, Equatable {
     var thresholdDB: Float = -45
     var attackMS: Float = 2
-    var holdMS: Float = 80
-    var releaseMS: Float = 150
+    var holdMS: Float = 100
+    var releaseMS: Float = 200
     var hysteresisDB: Float = 6
+    /// How far the gate attenuates when closed. Full mute makes the room
+    /// disappear abruptly; a finite range ducks it instead, which sounds
+    /// natural on a noisy input.
+    var rangeDB: Float = -60
+
+    private enum CodingKeys: String, CodingKey {
+        case thresholdDB, attackMS, holdMS, releaseMS, hysteresisDB, rangeDB
+    }
+
+    init() {}
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        thresholdDB = try c.decodeIfPresent(Float.self, forKey: .thresholdDB) ?? -45
+        attackMS = try c.decodeIfPresent(Float.self, forKey: .attackMS) ?? 2
+        holdMS = try c.decodeIfPresent(Float.self, forKey: .holdMS) ?? 100
+        releaseMS = try c.decodeIfPresent(Float.self, forKey: .releaseMS) ?? 200
+        hysteresisDB = try c.decodeIfPresent(Float.self, forKey: .hysteresisDB) ?? 6
+        rangeDB = try c.decodeIfPresent(Float.self, forKey: .rangeDB) ?? -60
+    }
 }
 
 struct CompressorSettings: Codable, Equatable {
@@ -44,7 +64,7 @@ struct ExciterSettings: Codable, Equatable {
 
 struct BigBottomSettings: Codable, Equatable {
     var amount: Float = 0.35
-    var frequency: Float = 120
+    var frequency: Float = 100
     var drive: Float = 0.5
 }
 

@@ -166,6 +166,7 @@ final class ParameterStore: ObservableObject {
         send(.gateHoldMS, channel: channel, s.gate.holdMS)
         send(.gateReleaseMS, channel: channel, s.gate.releaseMS)
         send(.gateHysteresisDB, channel: channel, s.gate.hysteresisDB)
+        send(.gateRangeDB, channel: channel, s.gate.rangeDB)
 
         send(.compressorEnabled, channel: channel, s.compressorEnabled ? 1 : 0)
         send(.compThresholdDB, channel: channel, s.compressor.thresholdDB)
@@ -202,6 +203,7 @@ final class ParameterStore: ObservableObject {
         if a.gate.holdMS != b.gate.holdMS { send(.gateHoldMS, channel: c, b.gate.holdMS) }
         if a.gate.releaseMS != b.gate.releaseMS { send(.gateReleaseMS, channel: c, b.gate.releaseMS) }
         if a.gate.hysteresisDB != b.gate.hysteresisDB { send(.gateHysteresisDB, channel: c, b.gate.hysteresisDB) }
+        if a.gate.rangeDB != b.gate.rangeDB { send(.gateRangeDB, channel: c, b.gate.rangeDB) }
 
         if a.compressorEnabled != b.compressorEnabled { send(.compressorEnabled, channel: c, b.compressorEnabled ? 1 : 0) }
         if a.compressor.thresholdDB != b.compressor.thresholdDB { send(.compThresholdDB, channel: c, b.compressor.thresholdDB) }
