@@ -57,12 +57,16 @@ final class AudioEngine {
     /// Requests microphone access, then starts. Completion reports whether the
     /// user granted it.
     func requestPermissionAndStart(_ completion: @escaping (Bool) -> Void) {
-        switch AVCaptureDevice.authorizationStatus(for: .audio) {
+        let status = AVCaptureDevice.authorizationStatus(for: .audio)
+        NSLog("OpenConnect: microphone authorizationStatus = %d (%@), bundle = %@",
+              status.rawValue, Self.describe(status), Bundle.main.bundlePath)
+        switch status {
         case .authorized:
             start()
             completion(true)
         case .notDetermined:
             AVCaptureDevice.requestAccess(for: .audio) { granted in
+                NSLog("OpenConnect: requestAccess returned granted = %@", granted ? "true" : "false")
                 DispatchQueue.main.async {
                     if granted { self.start() }
                     completion(granted)
@@ -70,6 +74,16 @@ final class AudioEngine {
             }
         default:
             completion(false)
+        }
+    }
+
+    private static func describe(_ status: AVAuthorizationStatus) -> String {
+        switch status {
+        case .notDetermined: return "notDetermined"
+        case .restricted: return "restricted"
+        case .denied: return "denied"
+        case .authorized: return "authorized"
+        @unknown default: return "unknown"
         }
     }
 
@@ -115,7 +129,12 @@ final class AudioEngine {
             onDevicesChanged?(usable)
         }
 
+        NSLog("OpenConnect: bound %d device(s): %@", usable.count,
+              usable.map(\.name).joined(separator: ", "))
         ensureOutputRunning()
+        NSLog("OpenConnect: sinkAvailable = %@, outputUnit = %@, inputUnits = %d",
+              sinkAvailable ? "true" : "false",
+              outputUnit == nil ? "nil" : "ok", inputs.count)
         for input in inputs {
             if let unit = input.pointee.unit {
                 AudioOutputUnitStart(unit)

@@ -10,6 +10,10 @@ let toneHz = 440.0
 let seconds = 5.0
 let amplitude: Float = 0.25
 
+/// `--listen` measures whatever is already on OpenConnect Mic (i.e. the running
+/// app's mix) instead of injecting a tone into the sink.
+let listenOnly = CommandLine.arguments.contains("--listen")
+
 func devices() -> [AudioObjectID] {
     var a = AudioObjectPropertyAddress(mSelector: kAudioHardwarePropertyDevices,
         mScope: kAudioObjectPropertyScopeGlobal, mElement: kAudioObjectPropertyElementMain)
@@ -127,15 +131,17 @@ var inCB = AURenderCallbackStruct(inputProc: { refCon, flags, ts, bus, n, _ -> O
 AudioUnitSetProperty(inUnit, kAudioOutputUnitProperty_SetInputCallback, kAudioUnitScope_Global, 0,
     &inCB, UInt32(MemoryLayout<AURenderCallbackStruct>.size))
 
-for (u, label) in [(outUnit, "sink"), (inUnit, "mic")] {
+for (u, label) in listenOnly ? [(inUnit, "mic")] : [(outUnit, "sink"), (inUnit, "mic")] {
     let i = AudioUnitInitialize(u)
     if i != noErr { fputs("\(label) init failed \(i)\n", stderr); exit(3) }
 }
-if AudioOutputUnitStart(outUnit) != noErr { fputs("sink start failed\n", stderr); exit(4) }
-usleep(300_000)
+if !listenOnly {
+    if AudioOutputUnitStart(outUnit) != noErr { fputs("sink start failed\n", stderr); exit(4) }
+    usleep(300_000)
+}
 if AudioOutputUnitStart(inUnit) != noErr { fputs("mic start failed\n", stderr); exit(5) }
 usleep(UInt32(seconds * 1_000_000))
-AudioOutputUnitStop(inUnit); AudioOutputUnitStop(outUnit)
+AudioOutputUnitStop(inUnit); if !listenOnly { AudioOutputUnitStop(outUnit) }
 
 func db(_ x: Double) -> String { x <= 0 ? "-inf" : String(format: "%.2f dBFS", 20 * log10(x)) }
 print("frames captured: \(c.frames)  (expected ~\(Int(seconds * 48000)))")
