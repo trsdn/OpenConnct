@@ -61,11 +61,36 @@ final class AudioDeviceManager {
             .filter(\.isPhysicalInput)
     }
 
+    /// Resolve the sink by UID translation rather than by scanning the device
+    /// list.
+    ///
+    /// The sink is deliberately marked hidden so no user can select it as an
+    /// output and build a feedback loop — and `kAudioHardwarePropertyDevices`
+    /// omits hidden devices, so enumerating can never find it.
+    /// `kAudioHardwarePropertyTranslateUIDToDevice` is the documented way to
+    /// reach a device you already know the UID of, hidden or not.
     func sinkDeviceID() -> AudioObjectID? {
-        for id in allDeviceIDs() {
-            if uid(of: id) == OCDriver.sinkUID { return id }
+        deviceID(forUID: OCDriver.sinkUID)
+    }
+
+    func deviceID(forUID uid: String) -> AudioObjectID? {
+        var address = AudioObjectPropertyAddress(
+            mSelector: kAudioHardwarePropertyTranslateUIDToDevice,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain)
+
+        var cfUID = uid as CFString
+        var device = AudioObjectID(kAudioObjectUnknown)
+        var size = UInt32(MemoryLayout<AudioObjectID>.size)
+
+        let status = withUnsafeMutablePointer(to: &cfUID) { uidPtr -> OSStatus in
+            AudioObjectGetPropertyData(
+                AudioObjectID(kAudioObjectSystemObject), &address,
+                UInt32(MemoryLayout<CFString>.size), uidPtr, &size, &device)
         }
-        return nil
+
+        guard status == noErr, device != AudioObjectID(kAudioObjectUnknown) else { return nil }
+        return device
     }
 
     private func allDeviceIDs() -> [AudioObjectID] {
