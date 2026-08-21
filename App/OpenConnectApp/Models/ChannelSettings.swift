@@ -111,4 +111,10 @@ struct EngineDiagnostics: Equatable {
     /// Human-readable device name per UID, so the diagnostics panel can say
     /// "RØDE NT-USB Mini" rather than a CoreAudio UID string.
     var perChannelName: [String: String] = [:]
+    /// Largest gap between two consecutive input callbacks, in microseconds,
+    /// since diagnostics were last read. Compare against the device period: at
+    /// 48 kHz and 512 frames that is 10 667 us, so a gap of 30 000 us means the
+    /// microphone's callback was two periods late. This distinguishes an
+    /// external scheduling stall from anything the drift controller could fix.
+    var perChannelMaxInputGapUS: [String: UInt32] = [:]
 }

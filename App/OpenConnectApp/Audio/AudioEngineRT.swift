@@ -129,6 +129,23 @@ struct ChannelRT {
 
     var underruns: UInt32 = 0
     var overruns: UInt32 = 0
+
+    /// Host time of the previous input callback, and the largest gap between
+    /// two consecutive input callbacks since the diagnostics were last read.
+    ///
+    /// These exist to answer one specific question that the fill level alone
+    /// cannot: when the ring level steps down, did the *input* stall, or did the
+    /// output run extra cycles? A gap materially longer than the device period
+    /// means the microphone's callback was late, which is a scheduling problem
+    /// outside this process and nothing the drift controller can prevent.
+    /// Reading the timebase is a register read on Apple silicon, so this is
+    /// render-safe.
+    var lastInputHostTime: UInt64 = 0
+    var maxInputGapUS: UInt32 = 0
+    /// Frames delivered by the largest single input callback, which separates
+    /// "callback was late" from "callback was late and then delivered the
+    /// backlog in one go".
+    var maxInputFrames: UInt32 = 0
     /// Published for diagnostics: deviation from nominal, in parts per million.
     var ratioPPM: Double = 0
     var fillFrames: Double = 0
@@ -490,6 +507,23 @@ struct InputRT {
     var hardwareChannels: Int32 = 1
 }
 
+/// Converts mach host ticks to microseconds using a timebase cached at load.
+///
+/// `mach_timebase_info` allocates nothing but is a call into the kernel's
+/// commpage; caching it in a `let` means the render path only ever multiplies.
+private let ocHostTimebase: (numer: Double, denom: Double) = {
+    var info = mach_timebase_info_data_t()
+    mach_timebase_info(&info)
+    return (Double(info.numer), Double(info.denom))
+}()
+
+@inline(__always)
+func ocHostTicksToMicroseconds(_ ticks: UInt64) -> UInt32 {
+    let ns = Double(ticks) * ocHostTimebase.numer / ocHostTimebase.denom
+    let us = ns / 1000.0
+    return us >= 4_000_000 ? 4_000_000 : UInt32(us)
+}
+
 /// Input callback: pull the hardware's frames and hand them to the ring buffer.
 ///
 /// This runs on the *device's* clock, which is not the output clock — that
@@ -530,6 +564,18 @@ let ocInputRenderCallback: AURenderCallback = {
             }
             mono[i] = sum * scale
         }
+    }
+
+    // Timing, before the write, so a slow write cannot be mistaken for a gap.
+    let now = mach_absolute_time()
+    let channel = input.pointee.channel!
+    if channel.pointee.lastInputHostTime != 0 {
+        let deltaUS = ocHostTicksToMicroseconds(now &- channel.pointee.lastInputHostTime)
+        if deltaUS > channel.pointee.maxInputGapUS { channel.pointee.maxInputGapUS = deltaUS }
+    }
+    channel.pointee.lastInputHostTime = now
+    if UInt32(frames) > channel.pointee.maxInputFrames {
+        channel.pointee.maxInputFrames = UInt32(frames)
     }
 
     let written = oc_ring_buffer_write(input.pointee.channel.pointee.ring, mono, UInt32(frames))

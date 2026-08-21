@@ -87,6 +87,7 @@ sign-app:
 		| grep 'Developer ID Application' | head -1 | sed 's/.*"\(.*\)"/\1/')}"; \
 	if [ -n "$$identity" ]; then \
 		codesign --force --options runtime --sign "$$identity" --timestamp \
+			--entitlements App/OpenConnect.entitlements \
 			$(APP_BUNDLE) >/dev/null 2>&1 && \
 		echo "Signed $(APP_BUNDLE) with: $$identity"; \
 	else \

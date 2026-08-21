@@ -316,8 +316,10 @@ final class ParameterStore: ObservableObject {
         var ppmMax = -Double.greatestFiniteMagnitude
         var ppmSum = 0.0
         var count = 0
+        var maxGapUS: UInt32 = 0
 
-        mutating func add(fill: Double, ppm: Double) {
+        mutating func add(fill: Double, ppm: Double, gapUS: UInt32) {
+            maxGapUS = max(maxGapUS, gapUS)
             fillMin = min(fillMin, fill)
             fillMax = max(fillMax, fill)
             fillSum += fill
@@ -331,9 +333,10 @@ final class ParameterStore: ObservableObject {
             guard count > 0 else { return "no samples" }
             let n = Double(count)
             return String(
-                format: "fill %.0f/%.1f/%.0f ppm %+.1f/%+.1f/%+.1f",
+                format: "fill %.0f/%.1f/%.0f ppm %+.1f/%+.1f/%+.1f gap %.1fms",
                 fillMin, fillSum / n, fillMax,
-                ppmMin, ppmSum / n, ppmMax)
+                ppmMin, ppmSum / n, ppmMax,
+                Double(maxGapUS) / 1000.0)
         }
     }
 
@@ -342,7 +345,8 @@ final class ParameterStore: ObservableObject {
 
         for (uid, ppm) in d.perChannelRatioPPM {
             soakAccumulators[uid, default: SoakAccumulator()]
-                .add(fill: d.perChannelFill[uid] ?? 0, ppm: ppm)
+                .add(fill: d.perChannelFill[uid] ?? 0, ppm: ppm,
+                     gapUS: d.perChannelMaxInputGapUS[uid] ?? 0)
         }
 
         let now = Date()

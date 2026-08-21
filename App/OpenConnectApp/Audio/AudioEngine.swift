@@ -403,6 +403,10 @@ final class AudioEngine {
             diagnostics.perChannelRatioPPM[device.uid] = channel.pointee.ratioPPM
             diagnostics.perChannelFill[device.uid] = channel.pointee.fillFrames
             diagnostics.perChannelName[device.uid] = device.name
+            // Read-and-clear, so each report describes the interval since the
+            // last one rather than the worst case since launch.
+            diagnostics.perChannelMaxInputGapUS[device.uid] = channel.pointee.maxInputGapUS
+            channel.pointee.maxInputGapUS = 0
         }
         return diagnostics
     }
