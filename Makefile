@@ -1,4 +1,4 @@
-.PHONY: all build driver clean run test test-driver test-all install-driver uninstall-driver
+.PHONY: all build driver sign-app clean run test test-driver test-all install-driver uninstall-driver
 
 APP_NAME       = OpenConnect
 DRIVER_NAME    = OpenConnect
@@ -74,6 +74,25 @@ build: $(DSP_LIB)
 		-output $(APP_BUNDLE)/Contents/MacOS/$(APP_NAME)
 	@cp $(APP_PLIST) $(APP_BUNDLE)/Contents/Info.plist
 	@echo "Built $(APP_BUNDLE) [$(APP_ARCHS)]"
+	@$(MAKE) --no-print-directory sign-app
+
+# Sign the app with a real identity whenever one is available.
+#
+# This is not cosmetic. TCC keys the microphone grant on the code signature, so
+# an ad-hoc signature — which changes on every single rebuild — makes macOS
+# forget the permission and re-prompt after every build, and orphans the old
+# grant in System Settings. Only a stable Designated Requirement fixes that.
+sign-app:
+	@identity="$${CODE_SIGN_IDENTITY:-$$(security find-identity -v -p codesigning 2>/dev/null \
+		| grep 'Developer ID Application' | head -1 | sed 's/.*"\(.*\)"/\1/')}"; \
+	if [ -n "$$identity" ]; then \
+		codesign --force --options runtime --sign "$$identity" --timestamp \
+			$(APP_BUNDLE) >/dev/null 2>&1 && \
+		echo "Signed $(APP_BUNDLE) with: $$identity"; \
+	else \
+		echo "WARNING: no Developer ID Application identity; leaving $(APP_BUNDLE) ad-hoc signed."; \
+		echo "         macOS will re-ask for microphone access after every rebuild."; \
+	fi
 
 # The app carries its own copy of the driver so it can install or update it.
 embed-driver: build driver
@@ -81,6 +100,8 @@ embed-driver: build driver
 	@rm -rf $(APP_BUNDLE)/Contents/Library/Audio/Plug-Ins/HAL/$(DRIVER_NAME).driver
 	@ditto $(DRIVER_BUNDLE) $(APP_BUNDLE)/Contents/Library/Audio/Plug-Ins/HAL/$(DRIVER_NAME).driver
 	@echo "Embedded driver into $(APP_BUNDLE)"
+	@# Re-sign: embedding nested content after signing invalidates the seal.
+	@$(MAKE) --no-print-directory sign-app
 
 test:
 	cd Core && swift test

@@ -16,8 +16,22 @@ struct AudioInputDevice: Equatable, Identifiable {
     var name: String
     var inputChannels: Int
     var nominalSampleRate: Double
+    var transportType: UInt32
 
     var id: String { uid }
+
+    /// Transports that describe another piece of software rather than a
+    /// microphone. Capturing these would mix other apps' audio — or another
+    /// loopback driver's output — into our own mix.
+    static let softwareTransports: Set<UInt32> = [
+        kAudioDeviceTransportTypeVirtual,
+        kAudioDeviceTransportTypeAggregate,
+        kAudioDeviceTransportTypeAutoAggregate,
+    ]
+
+    /// True when the device is backed by real hardware we can reasonably treat
+    /// as a microphone.
+    var isPhysicalInput: Bool { !Self.softwareTransports.contains(transportType) }
 }
 
 /// Enumerates input devices and reports hot-plug changes.
@@ -39,6 +53,12 @@ final class AudioDeviceManager {
             .filter { $0.inputChannels > 0 }
             // Never offer our own virtual devices as a capture source.
             .filter { $0.uid != OCDriver.micUID && $0.uid != OCDriver.sinkUID }
+            // Nor anyone else's. On a real machine the input list is full of
+            // loopback drivers (other conferencing apps, capture utilities,
+            // RØDE Connect itself). Binding those would mix unrelated app audio
+            // into the output and, with two such drivers installed, can form a
+            // loop. Only real hardware is a microphone.
+            .filter(\.isPhysicalInput)
     }
 
     func sinkDeviceID() -> AudioObjectID? {
@@ -80,7 +100,24 @@ final class AudioDeviceManager {
             uid: uid,
             name: name,
             inputChannels: inputChannelCount(of: id),
-            nominalSampleRate: sampleRate(of: id))
+            nominalSampleRate: sampleRate(of: id),
+            transportType: transportType(of: id))
+    }
+
+    /// `kAudioDevicePropertyTransportType`, e.g. `usb `, `bltn`, `virt`.
+    /// Unknown is reported as 0 and is deliberately *not* treated as software:
+    /// some legitimate hardware drivers leave it unset.
+    func transportType(of id: AudioObjectID) -> UInt32 {
+        var address = AudioObjectPropertyAddress(
+            mSelector: kAudioDevicePropertyTransportType,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain)
+        var value: UInt32 = 0
+        var size = UInt32(MemoryLayout<UInt32>.size)
+        guard AudioObjectGetPropertyData(id, &address, 0, nil, &size, &value) == noErr else {
+            return 0
+        }
+        return value
     }
 
     // MARK: - Individual properties
