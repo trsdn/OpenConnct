@@ -407,9 +407,27 @@ final class AudioEngine {
         meters.inputRMSDB = input.rms_db
         meters.outputPeakDB = output.peak_db
         meters.outputRMSDB = output.rms_db
+        let postFader = oc_meter_read(channel.pointee.postFaderMeter)
+        meters.postFaderPeakDB = postFader.peak_db
+        meters.postFaderRMSDB = postFader.rms_db
         meters.gateReductionDB = oc_channel_strip_gate_gr_db(channel.pointee.strip)
         meters.compressorReductionDB = oc_channel_strip_comp_gr_db(channel.pointee.strip)
         meters.connected = channel.pointee.active != 0
+        return meters
+    }
+
+    /// Level of the summed mix leaving for the virtual device.
+    ///
+    /// Returned as `ChannelMeters` so the master bar can reuse the same view and
+    /// the same publishing path as a channel bar; only the post-fader fields are
+    /// meaningful. The alternative — a second observable type, a second meter
+    /// view, a second subscription mechanism — would have bought nothing.
+    func masterMeters() -> ChannelMeters {
+        let values = oc_meter_read(rt.pointee.masterMeter)
+        var meters = ChannelMeters()
+        meters.postFaderPeakDB = values.peak_db
+        meters.postFaderRMSDB = values.rms_db
+        meters.connected = running
         return meters
     }
 

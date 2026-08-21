@@ -113,6 +113,11 @@ struct ChannelMeters: Equatable {
     var inputRMSDB: Float = -120
     var outputPeakDB: Float = -120
     var outputRMSDB: Float = -120
+    /// Level after the fader and mute — this channel's actual contribution to
+    /// the mix, and the value every level meter in the interface shows. See the
+    /// note on `ChannelRT.postFaderMeter` for why the pre-fader tap is not it.
+    var postFaderPeakDB: Float = -120
+    var postFaderRMSDB: Float = -120
     var gateReductionDB: Float = 0
     var compressorReductionDB: Float = 0
     var connected: Bool = false
@@ -130,6 +135,8 @@ struct ChannelMeters: Equatable {
             inputRMSDB: q(inputRMSDB),
             outputPeakDB: q(outputPeakDB),
             outputRMSDB: q(outputRMSDB),
+            postFaderPeakDB: q(postFaderPeakDB),
+            postFaderRMSDB: q(postFaderRMSDB),
             gateReductionDB: q(gateReductionDB),
             compressorReductionDB: q(compressorReductionDB),
             connected: connected)

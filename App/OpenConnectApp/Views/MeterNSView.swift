@@ -37,7 +37,10 @@ import SwiftUI
 
 enum MeterTap {
     case input
+    /// After gain and the DSP chain, but before the fader and mute.
     case output
+    /// After the fader and mute — what the channel actually sends to the mix.
+    case postFader
     case gateReduction
     case compressorReduction
 }
@@ -46,8 +49,14 @@ enum MeterTap {
 
 /// One meter bar. Subscribes to its channel directly and repaints only itself.
 final class MeterNSView: NSView {
-    var tap: MeterTap = .output
+    var tap: MeterTap = .postFader
     var orientation: MeterOrientation = .vertical
+    /// Draws the target band and the dB ticks into the track. Off for the small
+    /// horizontal bars, where there is no room for either to read as anything
+    /// but noise.
+    var showsScale: Bool = false {
+        didSet { if showsScale != oldValue { needsDisplay = true } }
+    }
     var muted: Bool = false {
         didSet { if muted != oldValue { refresh(force: true) } }
     }
@@ -105,6 +114,8 @@ final class MeterNSView: NSView {
             rmsDB = m.inputRMSDB; peakDB = m.inputPeakDB
         case .output:
             rmsDB = m.outputRMSDB; peakDB = m.outputPeakDB
+        case .postFader:
+            rmsDB = m.postFaderRMSDB; peakDB = m.postFaderPeakDB
         case .gateReduction:
             reductionDB = -m.gateReductionDB
         case .compressorReduction:
@@ -171,6 +182,10 @@ final class MeterNSView: NSView {
         let length = vertical ? size.height : size.width
         let thickness = vertical ? size.width : size.height
 
+        if showsScale && !isReductionMeter {
+            drawScale(ctx, length: length, thickness: thickness, vertical: vertical)
+        }
+
         if isReductionMeter {
             let fillLen = reductionFraction(reductionDB) * length
             guard fillLen > 0 else { return }
@@ -224,6 +239,38 @@ final class MeterNSView: NSView {
         ctx.fill(rect)
     }
 
+    /// Draws the target band and the dB ticks into the empty track, underneath
+    /// the level bar.
+    ///
+    /// This is the answer to "where is it supposed to be?". Without it the meter
+    /// shows a quantity with no reference, which is why a user can watch it for
+    /// weeks and still not know whether they are aiming right. The band is drawn
+    /// on the track, not over the bar, so a correctly set level covers it — the
+    /// marks are guidance while you set up and disappear once you are there.
+    private func drawScale(
+        _ ctx: CGContext, length: CGFloat, thickness: CGFloat, vertical: Bool
+    ) {
+        let lowPos  = meterPosition(meterTargetLowDB) * length
+        let highPos = meterPosition(meterTargetHighDB) * length
+        if highPos > lowPos {
+            ctx.setFillColor(NSColor(Theme.meterGreen.opacity(0.16)).cgColor)
+            ctx.fill(vertical
+                ? CGRect(x: 0, y: lowPos, width: thickness, height: highPos - lowPos)
+                : CGRect(x: lowPos, y: 0, width: highPos - lowPos, height: thickness))
+        }
+
+        // One tick per labelled level. Rounded to whole pixels so they stay
+        // crisp and identical to each other at any size.
+        ctx.setFillColor(NSColor(Color(white: 1, opacity: 0.18)).cgColor)
+        for db in meterTickDB {
+            let pos = (meterPosition(db) * length).rounded()
+            guard pos > 0, pos < length else { continue }
+            ctx.fill(vertical
+                ? CGRect(x: 0, y: pos, width: thickness, height: 1)
+                : CGRect(x: pos, y: 0, width: 1, height: thickness))
+        }
+    }
+
     // Meters carry no information a screen reader can use, and announcing a
     // level twenty times a second would be actively hostile.
     override func accessibilityIsIgnored() -> Bool { true }
@@ -239,12 +286,14 @@ struct LiveLevelMeter: NSViewRepresentable {
     let tap: MeterTap
     let orientation: MeterOrientation
     var muted: Bool = false
+    var showsScale: Bool = false
 
     func makeNSView(context: Context) -> MeterNSView {
         let v = MeterNSView()
         v.tap = tap
         v.orientation = orientation
         v.muted = muted
+        v.showsScale = showsScale
         v.source = source
         return v
     }
@@ -253,6 +302,7 @@ struct LiveLevelMeter: NSViewRepresentable {
         v.tap = tap
         v.orientation = orientation
         v.muted = muted
+        v.showsScale = showsScale
         v.source = source
     }
 }

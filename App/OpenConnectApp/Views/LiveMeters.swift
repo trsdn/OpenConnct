@@ -127,37 +127,119 @@ struct ConnectionLabel: View {
 }
 
 /// The vertical meter beside a channel strip's fader.
+///
+/// Shows the post-fader level, so pulling the fader down pulls the bar down and
+/// muting empties it. Anything else makes the fader look broken.
 struct StripLevelMeter: View {
     @ObservedObject var source: ChannelMeterSource
     let muted: Bool
 
     var body: some View {
-        LiveLevelMeter(source: source, tap: .output, orientation: .vertical, muted: muted)
+        LiveLevelMeter(
+            source: source, tap: .postFader, orientation: .vertical,
+            muted: muted, showsScale: true)
             .frame(width: 8)
             .accessibilityHidden(true)
     }
 }
 
+/// Colour for a plain-language level verdict. Matches the meter's own bands, so
+/// the word and the picture can never disagree.
+func verdictColour(_ verdict: MeterVerdict) -> Color {
+    switch verdict {
+    case .silent:   return Theme.textDisabled
+    case .tooQuiet: return Theme.textSecondary
+    case .good:     return Theme.meterGreen
+    case .hot:      return Theme.meterAmber
+    case .clipping: return Theme.meterRed
+    }
+}
+
+/// The summed output, shown beside the channel strips.
+///
+/// The channel meters answer "is this microphone set right?". This one answers
+/// "is what leaves the app set right?", which is the question the person at the
+/// other end of the call cares about and which no channel meter can answer once
+/// there is more than one microphone open.
+struct MasterLevelMeter: View {
+    @ObservedObject var source: ChannelMeterSource
+
+    var body: some View {
+        let peak = source.meters.postFaderPeakDB
+        let verdict = meterVerdict(peakDB: peak)
+        VStack(spacing: 6) {
+            Text("SUMME")
+                .font(Theme.captionFont)
+                .foregroundColor(Theme.textSecondary)
+
+            LiveLevelMeter(
+                source: source, tap: .postFader, orientation: .vertical,
+                showsScale: true)
+                .frame(width: 12)
+                .frame(maxHeight: .infinity)
+                .accessibilityHidden(true)
+
+            Text(peak > -120 ? String(format: "%.0f", peak) : "—")
+                .font(Theme.valueFont)
+                .monospacedDigit()
+                .foregroundColor(Theme.textPrimary)
+
+            Text(verdict.text)
+                .font(Theme.captionFont)
+                .foregroundColor(verdictColour(verdict))
+                .lineLimit(1)
+                .fixedSize(horizontal: true, vertical: false)
+        }
+        // Narrow on purpose: every point spent here is a point the channel
+        // strips do not get, and there are only four short words to fit.
+        .frame(width: 52)
+        .padding(.vertical, 8)
+        .background(Theme.panel)
+        .cornerRadius(Theme.radiusSmall)
+        .help("Der Pegel, den OpenConnect an Teams, Zoom oder OBS weitergibt. "
+              + "Der grün hinterlegte Bereich ist das Ziel: dort sollten die "
+              + "lautesten Stellen beim Sprechen landen.")
+    }
+}
+
 /// Input and output levels in the detail pane.
+///
+/// "RAUS" is measured after the fader and mute, so every control the user can
+/// reach — gain, the effects, the fader, the mute button — moves this bar. A
+/// meter that ignores half the controls above it teaches the user to distrust
+/// all of it.
 struct LiveInputMeterRow: View {
     @ObservedObject var source: ChannelMeterSource
 
     var body: some View {
         let m = source.meters
-        VStack(spacing: 4) {
-            meterLine("IN", tap: .input, peak: m.inputPeakDB)
-            meterLine("OUT", tap: .output, peak: m.outputPeakDB)
+        let verdict = meterVerdict(peakDB: m.postFaderPeakDB)
+        VStack(alignment: .leading, spacing: 4) {
+            meterLine("REIN", tap: .input, peak: m.inputPeakDB, scale: false)
+            meterLine("RAUS", tap: .postFader, peak: m.postFaderPeakDB, scale: true)
+            HStack(spacing: 6) {
+                Spacer().frame(width: 26)
+                Text(verdict.text)
+                    .font(Theme.captionFont)
+                    .foregroundColor(verdictColour(verdict))
+                Spacer(minLength: 0)
+            }
+            .frame(height: 12)
         }
     }
 
     @ViewBuilder
-    private func meterLine(_ label: String, tap: MeterTap, peak: Float) -> some View {
+    private func meterLine(
+        _ label: String, tap: MeterTap, peak: Float, scale: Bool
+    ) -> some View {
         HStack(spacing: 6) {
             Text(label)
                 .font(Theme.captionFont)
                 .foregroundColor(Theme.textSecondary)
                 .frame(width: 26, alignment: .leading)
-            LiveLevelMeter(source: source, tap: tap, orientation: .horizontal)
+            LiveLevelMeter(
+                source: source, tap: tap, orientation: .horizontal,
+                showsScale: scale)
                 .frame(height: 12)
                 .accessibilityHidden(true)
             ValueText(

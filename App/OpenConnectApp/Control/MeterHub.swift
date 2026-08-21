@@ -39,6 +39,10 @@ final class DiagnosticsSource: ObservableObject {
 final class MeterHub {
     let diagnostics = DiagnosticsSource()
 
+    /// The summed output. Not per-channel, but published on exactly the same
+    /// path so the master bar costs no more than a channel bar does.
+    let master = ChannelMeterSource()
+
 
     private var sources: [String: ChannelConnectionSource] = [:]
     private var meterSources: [String: ChannelMeterSource] = [:]

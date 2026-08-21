@@ -29,7 +29,17 @@ struct RootView: View {
                     }
                 }
             )
-            .frame(minWidth: 160, idealWidth: 220, maxWidth: 360, maxHeight: .infinity)
+            // Four 80pt strips already needed 368pt, so the old 360pt ceiling
+            // clipped the last one; the summed meter beside them needs another
+            // 72. 440 is exactly those two together — raised enough to show
+            // everything, and no further, because this pane always takes its
+            // maximum and every extra point here widens the whole window.
+            // Four 80pt strips already needed 368pt, so the old 360pt ceiling
+            // clipped the last one; the summed meter beside them needs another
+            // 72. 440 is exactly those two together — raised enough to show
+            // everything, and no further, because this pane always takes its
+            // maximum and every extra point here is taken from the detail pane.
+            .frame(minWidth: 160, idealWidth: 440, maxWidth: 440, maxHeight: .infinity)
 
             // Right: detail pane or placeholder
             Group {

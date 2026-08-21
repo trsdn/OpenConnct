@@ -288,6 +288,8 @@ final class ParameterStore: ObservableObject {
             meterHub.publishConnection(m.connected, for: settings.deviceUID)
         }
 
+        meterHub.master.publish(engine.masterMeters())
+
         // Diagnostics are sampled at the full rate, because the soak statistics
         // want as many observations of the ring fill as they can get, but they
         // are only published to the UI a few times a second. The status line

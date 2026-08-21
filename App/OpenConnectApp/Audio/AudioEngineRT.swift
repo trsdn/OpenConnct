@@ -17,6 +17,10 @@ let kRingCapacity: UInt32 = 32768
 /// Steady-state ring occupancy the drift controller aims for, in frames. Large
 /// enough to absorb USB scheduling jitter, small enough to keep latency low.
 let kRingTargetFill: Float = 1536
+/// Meter fall-back time. Matches the decay already used by the channel strip's
+/// own meters so a bar does not drop at a different speed depending on which
+/// point in the signal it is watching.
+let kMeterDecayMS: Float = 300
 
 /// Applies the drift controller tuning.
 ///
@@ -123,6 +127,17 @@ struct ChannelRT {
     var faderGain: Float = 1
     var targetGain: Float = 1
 
+    /// Level of this channel's *actual contribution to the mix* — measured after
+    /// the fader and after mute, not before them.
+    ///
+    /// The strip's own output meter sits inside `oc_channel_strip`, which knows
+    /// nothing about the fader or the mute button, both of which live out here
+    /// in the mixer. Metering there meant a muted or fully closed channel still
+    /// showed a bouncing bar, and pulling a fader down moved nothing at all.
+    /// A meter that does not answer "what am I sending?" is worse than no meter,
+    /// because it is confidently wrong.
+    var postFaderMeter: UnsafeMutablePointer<oc_meter>! = nil
+
     /// Set by the input side once the device is delivering audio.
     var active: Int32 = 0
     /// Native sample rate of the hardware device feeding this channel.
@@ -163,6 +178,12 @@ struct EngineRT {
 
     var mix: UnsafeMutablePointer<Float>! = nil
 
+    /// Level of the summed mix — what the virtual device actually publishes, and
+    /// therefore the only number that answers "am I too quiet or too loud for
+    /// the other end of the call?". Every per-channel meter is a component of
+    /// this; none of them is a substitute for it.
+    var masterMeter: UnsafeMutablePointer<oc_meter>! = nil
+
     var sampleRate: Double = 48_000
 }
 
@@ -193,6 +214,10 @@ enum RTAlloc {
         let mix = UnsafeMutablePointer<Float>.allocate(capacity: kMaxFrames)
         mix.initialize(repeating: 0, count: kMaxFrames)
         engine.pointee.mix = mix
+
+        let master = UnsafeMutablePointer<oc_meter>.allocate(capacity: 1)
+        oc_meter_init(master, sampleRate, kMeterDecayMS)
+        engine.pointee.masterMeter = master
 
         return engine
     }
@@ -227,6 +252,10 @@ enum RTAlloc {
         processed.initialize(repeating: 0, count: kMaxFrames)
         channel.processed = processed
 
+        let postFader = UnsafeMutablePointer<oc_meter>.allocate(capacity: 1)
+        oc_meter_init(postFader, sampleRate, kMeterDecayMS)
+        channel.postFaderMeter = postFader
+
         return channel
     }
 
@@ -241,6 +270,7 @@ enum RTAlloc {
             channel.drift.deallocate()
             channel.pulled.deallocate()
             channel.processed.deallocate()
+            channel.postFaderMeter.deallocate()
         }
         channels.deinitialize(count: kMaxChannels)
         channels.deallocate()
@@ -248,6 +278,7 @@ enum RTAlloc {
         engine.pointee.paramQueue.deallocate()
         engine.pointee.paramStorage.deallocate()
         engine.pointee.mix.deallocate()
+        engine.pointee.masterMeter.deallocate()
 
         engine.deinitialize(count: 1)
         engine.deallocate()
@@ -410,7 +441,13 @@ let ocOutputRenderCallback: AURenderCallback = {
 
     for index in 0..<min(channelCount, kMaxChannels) {
         let channel = engine.pointee.channels + index
-        guard channel.pointee.active != 0 else { continue }
+        guard channel.pointee.active != 0 else {
+            // An inactive channel contributes nothing, so its meter must read
+            // nothing. Without this it would freeze at whatever it showed when
+            // the microphone was unplugged and stay there.
+            oc_meter_reset(channel.pointee.postFaderMeter)
+            continue
+        }
 
         // 2a. Drift control. The ring fill level is the error signal: if the
         // microphone's clock is fractionally faster than ours the ring slowly
@@ -461,18 +498,32 @@ let ocOutputRenderCallback: AURenderCallback = {
             offset += n
         }
 
-        // 2d. Fader, ramped across the block so moves never step.
+        // 2d. Fader, ramped across the block so moves never step, applied in
+        // place so the result can be metered before it is summed. This is the
+        // only point at which the signal is exactly what this channel sends to
+        // the mix — after gain, after the DSP chain, after the fader, and after
+        // mute (which is just a fader target of zero).
         let start = channel.pointee.faderGain
         let end = channel.pointee.targetGain
         let step = (end - start) / Float(frames)
         var gain = start
         let src = channel.pointee.processed!
         for i in 0..<frames {
-            mix[i] += src[i] * gain
+            src[i] *= gain
             gain += step
         }
         channel.pointee.faderGain = end
+
+        oc_meter_process_block(channel.pointee.postFaderMeter, src, UInt32(frames))
+
+        for i in 0..<frames {
+            mix[i] += src[i]
+        }
     }
+
+    // 2e. Meter the sum. Done before publishing so the number the user reads is
+    // the number the virtual device hands to Teams or Zoom, not an estimate.
+    oc_meter_process_block(engine.pointee.masterMeter, mix, UInt32(frames))
 
     // 3. Publish the mix. The virtual device is stereo (kChannelCount == 2 in
     // the driver) because that is what conferencing apps expect, but both mics

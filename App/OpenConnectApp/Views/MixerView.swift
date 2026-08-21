@@ -272,31 +272,41 @@ struct MixerView: View {
 
     @ViewBuilder
     private var stripArea: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(alignment: .top, spacing: 8) {
-                ForEach(store.channels) { ch in
-                    ChannelStripView(
-                        settings: ch,
-                        connection: store.meterHub.connection(for: ch.deviceUID),
-                        meterSource: store.meterHub.meterSource(for: ch.deviceUID),
-                        store: store,
-                        isSelected: selectedUID == ch.deviceUID,
-                        onSelect: { onSelectChannel(ch.deviceUID) }
-                    )
-                    // Deliberately a fixed height, not a flexible one. Meter
-                    // redraw cost scales with the drawn area, and letting the
-                    // strips stretch to 460pt took idle CPU from 6% to 16% on
-                    // three channels. The black band the user saw came from
-                    // the column not filling, not from the strips being short,
-                    // so the strips stay put and the column absorbs the space.
-                    .frame(height: 280)
+        HStack(alignment: .top, spacing: 8) {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(alignment: .top, spacing: 8) {
+                    ForEach(store.channels) { ch in
+                        ChannelStripView(
+                            settings: ch,
+                            connection: store.meterHub.connection(for: ch.deviceUID),
+                            meterSource: store.meterHub.meterSource(for: ch.deviceUID),
+                            store: store,
+                            isSelected: selectedUID == ch.deviceUID,
+                            onSelect: { onSelectChannel(ch.deviceUID) }
+                        )
+                        // Deliberately a fixed height, not a flexible one. Meter
+                        // redraw cost scales with the drawn area, and letting the
+                        // strips stretch to 460pt took idle CPU from 6% to 16% on
+                        // three channels. The black band the user saw came from
+                        // the column not filling, not from the strips being short,
+                        // so the strips stay put and the column absorbs the space.
+                        .frame(height: 280)
+                    }
                 }
+                .padding(12)
+                // Pin the strips to the top so the leftover space in a tall window
+                // collects below them rather than floating them in the middle.
+                .frame(maxHeight: .infinity, alignment: .top)
             }
-            .padding(12)
-            // Pin the strips to the top so the leftover space in a tall window
-            // collects below them rather than floating them in the middle.
-            .frame(maxHeight: .infinity, alignment: .top)
+
+            // Outside the scroll view on purpose: the summed level is the one
+            // reading that must never scroll out of sight, however many
+            // microphones are open.
+            MasterLevelMeter(source: store.meterHub.master)
+                .frame(height: 280)
+                .padding(.top, 12)
+                .padding(.trailing, 12)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 }
