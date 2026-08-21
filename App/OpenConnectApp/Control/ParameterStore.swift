@@ -17,6 +17,14 @@ final class ParameterStore: ObservableObject {
 
     @Published private(set) var diagnostics = EngineDiagnostics()
 
+    /// Every physical input attached to the machine, whether or not it is in use.
+    @Published private(set) var availableDevices: [AudioInputDevice] = []
+    /// The subset the user wants OpenConnect to mix. Empty is a valid choice.
+    @Published private(set) var enabledDeviceUIDs: Set<String> = []
+    /// True until the user has made an explicit choice, in which case every
+    /// input is used so a first launch is not silent.
+    @Published private(set) var deviceSelectionIsImplicit = true
+
     /// Set when the user has not granted microphone access yet.
     @Published var microphonePermissionDenied = false
 
@@ -25,6 +33,8 @@ final class ParameterStore: ObservableObject {
     private weak var engine: AudioEngine?
     private var meterTimer: Timer?
     private var saveWorkItem: DispatchWorkItem?
+    private let soakStart = Date()
+    private var lastSoakLog: Date?
 
     init() {
         saved = store.load()
@@ -35,7 +45,36 @@ final class ParameterStore: ObservableObject {
         engine.onDevicesChanged = { [weak self] devices in
             Task { @MainActor in self?.reconcile(devices: devices) }
         }
+        engine.onAvailableDevicesChanged = { [weak self] devices in
+            Task { @MainActor in self?.refreshAvailableDevices(devices) }
+        }
         startMeterPolling()
+    }
+
+    // MARK: - Device selection
+
+    private func refreshAvailableDevices(_ devices: [AudioInputDevice]) {
+        availableDevices = devices
+        if let stored = engine?.enabledDeviceUIDs {
+            deviceSelectionIsImplicit = false
+            enabledDeviceUIDs = stored
+        } else {
+            // No explicit choice yet: everything is in use, and the UI reflects
+            // that by showing all boxes ticked.
+            deviceSelectionIsImplicit = true
+            enabledDeviceUIDs = Set(devices.map(\.uid))
+        }
+    }
+
+    /// Turns one input on or off. The first call also converts the implicit
+    /// "use everything" state into an explicit, persisted selection.
+    func setDevice(_ uid: String, enabled: Bool) {
+        var next = enabledDeviceUIDs
+        if enabled { next.insert(uid) } else { next.remove(uid) }
+        guard next != enabledDeviceUIDs else { return }
+        enabledDeviceUIDs = next
+        deviceSelectionIsImplicit = false
+        engine?.setEnabledDeviceUIDs(next)
     }
 
     // MARK: - Device reconciliation
@@ -214,7 +253,41 @@ final class ParameterStore: ObservableObject {
         if updated != diagnostics {
             diagnostics = updated
         }
+        logSoakSampleIfEnabled(updated)
     }
+
+    // MARK: - Soak logging
+    //
+    // Opt-in via OPENCONNECT_SOAK_LOG=<seconds>. Off by default and costing one
+    // comparison per poll when off, this is how a long two-microphone run is
+    // measured: xruns must stay at zero and each channel's ring fill must stay
+    // bounded around its target rather than walking towards either end.
+
+    private func logSoakSampleIfEnabled(_ d: EngineDiagnostics) {
+        guard let interval = Self.soakInterval else { return }
+        let now = Date()
+        if let last = lastSoakLog, now.timeIntervalSince(last) < interval { return }
+        lastSoakLog = now
+
+        let elapsed = Int(now.timeIntervalSince(soakStart))
+        var parts = ["t=\(elapsed)s",
+                     "under=\(d.underruns)",
+                     "over=\(d.overruns)",
+                     "dropped=\(d.droppedParameters)"]
+        for uid in d.perChannelRatioPPM.keys.sorted() {
+            let name = d.perChannelName[uid] ?? uid
+            let ppm = d.perChannelRatioPPM[uid] ?? 0
+            let fill = d.perChannelFill[uid] ?? 0
+            parts.append(String(format: "[%@ ppm=%+.1f fill=%.1f]", name, ppm, fill))
+        }
+        NSLog("OpenConnect SOAK %@", parts.joined(separator: " "))
+    }
+
+    private static let soakInterval: TimeInterval? = {
+        guard let raw = ProcessInfo.processInfo.environment["OPENCONNECT_SOAK_LOG"],
+              let seconds = Double(raw), seconds > 0 else { return nil }
+        return seconds
+    }()
 
     deinit {
         meterTimer?.invalidate()

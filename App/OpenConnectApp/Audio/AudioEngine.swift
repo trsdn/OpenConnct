@@ -13,15 +13,24 @@ import Foundation
 final class AudioEngine {
     /// Fired when the set of connected input devices changes.
     var onDevicesChanged: (([AudioInputDevice]) -> Void)?
+    /// Fired when the set of *selectable* input devices changes — that is, every
+    /// physical input the machine has, whether or not the user enabled it.
+    var onAvailableDevicesChanged: (([AudioInputDevice]) -> Void)?
     /// Fired when the virtual sink appears or disappears.
     var onSinkAvailabilityChanged: ((Bool) -> Void)?
 
     private let deviceManager = AudioDeviceManager()
+    private let selectionStore = DeviceSelectionStore()
     private let rt: UnsafeMutablePointer<EngineRT>
 
     private var outputUnit: AudioUnit?
     private var inputs: [UnsafeMutablePointer<InputRT>] = []
     private var boundDevices: [AudioInputDevice] = []
+    /// Every physical input currently attached, before the user's selection is
+    /// applied. Kept so the selection UI can offer devices we are not using.
+    private(set) var availableDevices: [AudioInputDevice] = []
+    /// `nil` means "the user has never chosen", which we treat as "use everything".
+    private var enabledUIDs: Set<String>?
 
     private var running = false
     private var sinkAvailable = false
@@ -30,11 +39,32 @@ final class AudioEngine {
 
     init() {
         rt = RTAlloc.makeEngine(sampleRate: 48_000)
+        enabledUIDs = selectionStore.load()
     }
 
     deinit {
         stop()
         RTAlloc.destroy(rt)
+    }
+
+    // MARK: - Device selection
+
+    /// The UIDs the user has enabled. `nil` before they have ever chosen, which
+    /// means "everything", so a first launch still produces sound.
+    var enabledDeviceUIDs: Set<String>? { enabledUIDs }
+
+    /// Replaces the selection and rebinds. Passing an empty set is legitimate —
+    /// it means the user wants no inputs — and is persisted as such.
+    func setEnabledDeviceUIDs(_ uids: Set<String>) {
+        enabledUIDs = uids
+        selectionStore.save(uids)
+        rebind(devices: availableDevices)
+    }
+
+    /// Applies the user's selection to a raw device list.
+    private func selected(from devices: [AudioInputDevice]) -> [AudioInputDevice] {
+        guard let enabledUIDs else { return devices }
+        return devices.filter { enabledUIDs.contains($0.uid) }
     }
 
     // MARK: - Lifecycle
@@ -95,7 +125,11 @@ final class AudioEngine {
     /// here, so a microphone appearing or disappearing cannot interrupt the
     /// stream that Zoom or Teams is holding open.
     private func rebind(devices: [AudioInputDevice]) {
-        let usable = Array(devices.prefix(kMaxChannels))
+        if devices != availableDevices {
+            availableDevices = devices
+            onAvailableDevicesChanged?(devices)
+        }
+        let usable = Array(selected(from: devices).prefix(kMaxChannels))
 
         if usable != boundDevices {
             // Silence the render callback before mutating the state it reads.
@@ -129,7 +163,8 @@ final class AudioEngine {
             onDevicesChanged?(usable)
         }
 
-        NSLog("OpenConnect: bound %d device(s): %@", usable.count,
+        NSLog("OpenConnect: %d input(s) available, %d bound: %@",
+              availableDevices.count, usable.count,
               usable.map(\.name).joined(separator: ", "))
         ensureOutputRunning()
         NSLog("OpenConnect: sinkAvailable = %@, outputUnit = %@, inputUnits = %d",
@@ -367,6 +402,7 @@ final class AudioEngine {
             diagnostics.overruns &+= channel.pointee.overruns
             diagnostics.perChannelRatioPPM[device.uid] = channel.pointee.ratioPPM
             diagnostics.perChannelFill[device.uid] = channel.pointee.fillFrames
+            diagnostics.perChannelName[device.uid] = device.name
         }
         return diagnostics
     }

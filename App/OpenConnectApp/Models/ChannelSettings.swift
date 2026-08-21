@@ -108,4 +108,7 @@ struct EngineDiagnostics: Equatable {
     var droppedParameters: UInt32 = 0
     var perChannelRatioPPM: [String: Double] = [:]
     var perChannelFill: [String: Double] = [:]
+    /// Human-readable device name per UID, so the diagnostics panel can say
+    /// "RØDE NT-USB Mini" rather than a CoreAudio UID string.
+    var perChannelName: [String: String] = [:]
 }
