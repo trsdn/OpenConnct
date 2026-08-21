@@ -205,17 +205,18 @@ Write down all three:
 
 - The channel strip for the NT-USB Mini appears in the app.
 - Speaking into it moves the input level meter.
-- The engine indicator reads **Engine running** (green), not **Engine stopped** (red).
-- The status bar shows a **ppm** figure for the channel. A small non-zero number is correct and
-  expected — that is the drift controller doing its job. It is displayed in amber beyond ±100 ppm.
-- **No XRun or OVR badge appears.** These only show up when the count is above zero.
+- The status line above the strips reads **Ready** (green dot), not stopped or an error.
+- Open **Details** next to it. It shows a **ppm** figure per channel. A small non-zero number is
+  correct and expected — that is the drift controller doing its job. Right after a microphone is
+  connected it swings wide for up to a minute while it finds the rate; that is normal.
+- **Dropouts stops growing** once the microphones have settled.
 
 Now confirm the audio actually reaches other applications. Open **QuickTime Player → File → New
 Audio Recording**, click the chevron next to the record button, and choose **OpenConnect Mic**. Its
 level meter should move when you speak. This proves the whole path end to end: microphone → app →
 DSP → sink → ring buffer → virtual device → another application.
 
-**Known good:** clean speech, meters moving in both the app and QuickTime, no badges.
+**Known good:** clean speech, meters moving in both the app and QuickTime, status stays Ready.
 
 **Failure symptoms and what they mean:**
 
@@ -223,9 +224,9 @@ DSP → sink → ring buffer → virtual device → another application.
 |---|---|
 | App meter moves, QuickTime meter does not | The loopback inside the driver is not working — the app is rendering into the sink but the mic device is not reading it back |
 | Neither meter moves | Microphone permission was denied, or the wrong input device is selected in the app |
-| Steady crackling or clicking | Drift compensation problem. Note the ppm reading and whether the XRun count is climbing |
-| XRun count climbing steadily | The ring is starved — the input is not keeping up |
-| Engine indicator red | The engine failed to start; the sink device is probably missing. Check `OpenConnect Sink` exists internally by re-running the install |
+| Steady crackling or clicking | Drift compensation problem. Note the ppm reading and whether the Dropouts count is climbing |
+| Dropouts climbing steadily | The ring is starved — the input is not keeping up |
+| Status line red / not Ready | The engine failed to start; the sink device is probably missing. Check `OpenConnect Sink` exists internally by re-running the install |
 
 ---
 
@@ -278,12 +279,12 @@ Watch the status bar for the whole period:
 - **ppm per channel** — should settle to a small steady value per microphone and stay there. Two
   different microphones showing two different ppm values is exactly right; they have different
   crystals.
-- **XRun / OVR badges** — should never appear. In the offline simulation the controller held
-  ±200 ppm for a simulated two hours with zero underruns and zero overruns, so any xrun on real
-  hardware is a genuine finding worth reporting.
+- **Dropouts** — should stop growing after the microphones have connected. In the offline simulation
+  the controller held ±200 ppm for a simulated two hours with zero underruns and zero overruns, so
+  a count that keeps climbing on real hardware is a genuine finding worth reporting.
 
-**Known good:** clean audio from both microphones, no clicks or crackles, stable ppm, no badges,
-after fifteen-plus minutes.
+**Known good:** clean audio from both microphones, no clicks or crackles, stable ppm, status stays
+Ready, after fifteen-plus minutes.
 
 For reference, measured on the development machine with both microphones live, sampling the ring
 continuously rather than once per interval:
@@ -301,13 +302,13 @@ with ppm inside single digits and no underruns, is what healthy looks like.
 
 | Symptom | What it points to |
 |---|---|
-| Periodic click, roughly regular interval | Ring wrap or xrun. Check whether XRun/OVR is incrementing |
+| Periodic click, roughly regular interval | Ring wrap or a dropout. Check whether the Dropouts count is incrementing |
 | One channel gradually distorts or drops out | That channel's drift controller is not holding |
 | ppm climbing without settling | The controller is not converging — record the value over time |
 | Both channels crackle together | Output-side problem, not per-channel drift |
 
 Note that the ring fill level is tracked internally but is **not** currently shown in the interface;
-the ppm readout and the xrun badges are the diagnostics available to you.
+the ppm readout and the Dropouts count in the Details popover are the diagnostics available to you.
 
 ### If you want the detailed numbers
 
@@ -342,15 +343,17 @@ Finder does **not** show these messages anywhere.
 
 Microphones get unplugged constantly, so this must not require restarting the app.
 
-**Please treat this section as the least-tested part of the system.** Every other step above has
-been exercised on the development machine; a physical unplug of a live microphone has not, because
-it needs a hand on the cable. If something is going to be wrong, it is most likely to be here.
+This has now been exercised for real: a live microphone was physically unplugged and replugged
+while the app was running with three channels bound. The app kept the same process — no crash, no
+relaunch — the strip came back on its own, and the dropout counter moved by a couple during the
+re-connect and then stopped. Status returned to Ready by itself.
 
 With both running, unplug one microphone. Expect:
 
 - Its channel strip disappears.
-- The other channel keeps working **without a gap or a click**. Watch its XRun badge across the
-  unplug — a single xrun at the moment of removal is plausible; a rising count afterwards is not.
+- The other channel keeps working **without a gap or a click**. Watch the Dropouts figure in
+  Details across the unplug — a couple at the moment of removal or return is plausible; a count
+  that keeps rising afterwards is not.
 - The engine stays green rather than dropping to a stopped or error state.
 
 Now plug it back in. Expect the strip to return **with its previous settings intact** — gain,
@@ -461,6 +464,6 @@ Please include, whether it worked or not:
 1. Whether `OpenConnect Mic` appeared, and what `system_profiler` printed for it.
 2. The native format table for **each** microphone from Steps 3 and 4 — sample rate, channels, bit
    depth. This is the R5 evidence and is useful even on a completely successful run.
-3. Final ppm reading per channel, and the XRun / OVR counts after the ten-minute run in Step 5.
+3. Final ppm reading per channel, and the Dropouts count after the ten-minute run in Step 5.
 4. Any audible artefacts, with what you were doing at the time.
 5. If it failed: the relevant `coreaudiod` lines from Console.app.
