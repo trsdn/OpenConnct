@@ -32,6 +32,11 @@ be restarted; a few need their audio device re-selected.
 
 **Time required:** about 15 minutes.
 
+**Paths.** Commands in Sections 1–6 assume the repository is at `/Volumes/big/dev/OpenConnect`. If
+yours is elsewhere, substitute your own path. **Section 7 is deliberately path-independent** — the
+rollback must work even if the repository has been moved or deleted, so it never depends on a
+checkout.
+
 **You will need:** the RØDE NT-USB Mini, the RØDE VideoMic NTG with a USB cable, and your
 administrator password.
 
@@ -45,7 +50,7 @@ them individually first is the whole point — see the note in Step 4.
 No password needed for this step, and it changes nothing outside the project folder.
 
 ```bash
-cd /Volumes/big/dev/OpenConnect/.worktrees/trsdn-stunning-journey
+cd /Volumes/big/dev/OpenConnect
 make clean
 make embed-driver UNIVERSAL=1
 ```
@@ -147,7 +152,7 @@ to remove it cleanly, and report what Console showed.
 Plug in **only** the NT-USB Mini. Leave the VideoMic NTG unplugged.
 
 ```bash
-open dist/OpenConnect.app
+open /Volumes/big/dev/OpenConnect/dist/OpenConnect.app
 ```
 
 macOS will ask for microphone access the first time. **You must allow it.** If you dismiss the
@@ -286,34 +291,42 @@ Finally, quit the app, relaunch it, and confirm your settings survived.
 
 ## 7. Rollback: getting your audio back
 
-**Read this section first if something is wrong. It does not depend on anything above.**
+**Read this section first if something is wrong. It does not depend on anything above, and it does
+not depend on the project folder still existing.**
 
-### Fastest path: remove the driver
+### Remove the driver — works from anywhere
 
-```bash
-cd /Volumes/big/dev/OpenConnect/.worktrees/trsdn-stunning-journey
-make uninstall-driver
-```
-
-This removes `/Library/Audio/Plug-Ins/HAL/OpenConnect.driver` and restarts CoreAudio. It asks for
-your password. It then verifies that `OpenConnect Mic` is really gone and tells you if it is not.
-
-Audio will drop out briefly again as CoreAudio restarts. That is expected.
-
-### If you cannot run `make` — remove it by hand
-
-These two commands are the entire uninstall. Nothing else is written anywhere on your system.
+These two commands are the entire uninstall. They work from **any** directory, on any machine, even
+if the project folder has been moved or deleted. Nothing else is written anywhere on your system.
 
 ```bash
 sudo rm -rf "/Library/Audio/Plug-Ins/HAL/OpenConnect.driver"
 sudo killall -9 coreaudiod
 ```
 
+Audio will drop out briefly as CoreAudio restarts. That is expected. Wait about five seconds —
+macOS relaunches the service by itself.
+
 Then confirm it is gone:
 
 ```bash
 system_profiler SPAudioDataType | grep -c "OpenConnect"   # expect 0
 ```
+
+That is the whole rollback. Everything below is optional.
+
+### Convenience alternative, if you still have the repo
+
+If the project folder is present, this does the same thing and additionally verifies the device
+really disappeared:
+
+```bash
+cd /Volumes/big/dev/OpenConnect
+make uninstall-driver
+```
+
+Prefer the two raw commands above if you are in a hurry or unsure the folder still exists — the
+`make` target only works from a checkout, and it is not needed to fix your audio.
 
 ### If the Mac has no working audio at all
 
@@ -324,7 +337,9 @@ crashes.
 
 Work through these in order:
 
-1. **Remove the driver** using the two commands above. This alone fixes almost every case.
+1. **Remove the driver** with the two commands at the top of this section
+   (`sudo rm -rf …/OpenConnect.driver` then `sudo killall -9 coreaudiod`). This alone fixes almost
+   every case, and it needs nothing but a terminal.
 
 2. **Restart CoreAudio again**, in case it came back before the file was gone:
 
