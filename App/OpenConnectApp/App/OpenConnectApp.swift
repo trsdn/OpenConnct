@@ -9,9 +9,14 @@ struct OpenConnectApp: App {
         WindowGroup("OpenConnect") {
             RootView()
                 .environmentObject(store)
-                .frame(minWidth: 720, minHeight: 460)
+                .frame(minWidth: 760, idealWidth: 900, minHeight: 520, idealHeight: 620)
                 .onAppear(perform: startAudio)
         }
+        // Without an explicit default the window is sized from the content's
+        // ideal size on first launch and then restored at whatever size it was
+        // left, which is what made it look shifted.
+        .defaultSize(width: 900, height: 620)
+        .windowResizability(.contentMinSize)
     }
 
     private func startAudio() {

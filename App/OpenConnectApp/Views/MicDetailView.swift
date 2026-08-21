@@ -41,11 +41,7 @@ private struct GainRow: View {
                 store.update(settings.deviceUID) { $0.gainDB = next }
             }
 
-            Text(formatDB(settings.gainDB, decimals: 1))
-                .font(Theme.valueFont)
-                .foregroundColor(Theme.textPrimary)
-                .frame(width: 64, alignment: .center)
-                .monospacedDigit()
+            ValueText(text: formatDB(settings.gainDB, decimals: 1), width: 64, alignment: .center)
 
             GainStepButton(symbol: "plus", label: "Increase gain") {
                 let next = min(gainRange.upperBound, settings.gainDB + stepDB)
@@ -62,6 +58,7 @@ private struct GainRow: View {
             .accessibilityLabel(Text("Gain"))
             .accessibilityValue(Text(formatDB(settings.gainDB, decimals: 1)))
         }
+        .frame(height: 30)
     }
 }
 
@@ -80,32 +77,34 @@ private struct PadRow: View {
 
             Toggle(isOn: bind(settings.padEnabled, uid: settings.deviceUID, store: store,
                               keyPath: \.padEnabled)) {
-                Text(settings.padEnabled ? formatDB(settings.padDB, decimals: 0) : "Off")
+                // Fixed width: "Off" and "-20 dB" are different lengths, and a
+                // toggle that resizes when tapped drags the row with it.
+                Text(settings.padEnabled ? "On" : "Off")
+                    .frame(width: 24)
             }
             .toggleStyle(PillToggleStyle())
             .accessibilityLabel(Text("Pad"))
             .accessibilityValue(Text(settings.padEnabled ? formatDB(settings.padDB, decimals: 1) : "Off"))
 
-            if settings.padEnabled {
-                Slider(
-                    value: bind(settings.padDB, uid: settings.deviceUID, store: store,
-                                keyPath: \.padDB),
-                    in: -40...(-6)
-                )
-                .tint(Theme.accent)
-                .frame(maxWidth: .infinity)
-                .accessibilityLabel(Text("Pad level"))
-                .accessibilityValue(Text(formatDB(settings.padDB, decimals: 1)))
+            // Always present, disabled when the pad is off, so enabling it
+            // cannot change the height or width of anything.
+            Slider(
+                value: bind(settings.padDB, uid: settings.deviceUID, store: store,
+                            keyPath: \.padDB),
+                in: -40...(-6)
+            )
+            .disabled(!settings.padEnabled)
+            .tint(settings.padEnabled ? Theme.accent : Theme.textDisabled)
+            .frame(maxWidth: .infinity)
+            .opacity(settings.padEnabled ? 1 : 0.4)
+            .accessibilityLabel(Text("Pad level"))
+            .accessibilityValue(Text(formatDB(settings.padDB, decimals: 1)))
 
-                Text(formatDB(settings.padDB, decimals: 1))
-                    .font(Theme.valueFont)
-                    .foregroundColor(Theme.textPrimary)
-                    .frame(width: 56, alignment: .trailing)
-                    .monospacedDigit()
-            } else {
-                Spacer()
-            }
+            ValueText(
+                text: formatDB(settings.padDB, decimals: 1),
+                colour: settings.padEnabled ? Theme.textPrimary : Theme.textDisabled)
         }
+        .frame(height: 30)
     }
 }
 
@@ -130,9 +129,10 @@ private struct HPFRow: View {
                         } label: {
                             Text(mode.label)
                                 .font(Theme.labelFont)
+                                .lineLimit(1)
                                 .foregroundColor(settings.hpfMode == mode ? .black : Theme.textSecondary)
                                 .padding(.horizontal, 8)
-                                .padding(.vertical, 4)
+                                .frame(height: 22)
                                 .background(
                                     RoundedRectangle(cornerRadius: Theme.radiusSmall)
                                         .fill(settings.hpfMode == mode ? Theme.accent : Theme.raised)
@@ -143,33 +143,39 @@ private struct HPFRow: View {
                         .accessibilityAddTraits(settings.hpfMode == mode ? .isSelected : [])
                     }
                 }
-                Spacer()
+                Spacer(minLength: 0)
             }
+            .frame(height: 26)
 
-            if settings.hpfMode == .continuous {
-                HStack(spacing: 8) {
-                    Text("")
-                        .frame(width: 36)
-                    Text("Freq")
-                        .font(Theme.labelFont)
-                        .foregroundColor(Theme.textSecondary)
-                    Slider(
-                        value: bind(settings.hpfFrequency, uid: settings.deviceUID, store: store,
-                                    keyPath: \.hpfFrequency),
-                        in: 20...500
-                    )
-                    .tint(Theme.accent)
-                    .accessibilityLabel(Text("HPF Frequency"))
-                    .accessibilityValue(Text(formatHz(settings.hpfFrequency)))
-                    Text(formatHz(settings.hpfFrequency))
-                        .font(Theme.valueFont)
-                        .foregroundColor(Theme.textPrimary)
-                        .frame(width: 60, alignment: .trailing)
-                        .monospacedDigit()
-                }
+            // The continuous-frequency row is always laid out, disabled unless
+            // continuous mode is selected. Inserting it on demand would move
+            // every effect panel below it each time the mode changed.
+            HStack(spacing: 8) {
+                Color.clear.frame(width: 36, height: 1)
+                Text("Freq")
+                    .font(Theme.labelFont)
+                    .foregroundColor(isContinuous ? Theme.textSecondary : Theme.textDisabled)
+                    .frame(width: 30, alignment: .leading)
+                Slider(
+                    value: bind(settings.hpfFrequency, uid: settings.deviceUID, store: store,
+                                keyPath: \.hpfFrequency),
+                    in: 20...500
+                )
+                .disabled(!isContinuous)
+                .tint(isContinuous ? Theme.accent : Theme.textDisabled)
+                .accessibilityLabel(Text("HPF Frequency"))
+                .accessibilityValue(Text(formatHz(settings.hpfFrequency)))
+                ValueText(
+                    text: formatHz(settings.hpfFrequency),
+                    width: 60,
+                    colour: isContinuous ? Theme.textPrimary : Theme.textDisabled)
             }
+            .frame(height: 26)
+            .opacity(isContinuous ? 1 : 0.4)
         }
     }
+
+    private var isContinuous: Bool { settings.hpfMode == .continuous }
 }
 
 // MARK: - InputMeterRow
@@ -178,49 +184,27 @@ private struct InputMeterRow: View {
     let meters: ChannelMeters
 
     var body: some View {
-        VStack(spacing: 2) {
-            HStack(spacing: 4) {
-                Text("IN")
-                    .font(Theme.captionFont)
-                    .foregroundColor(Theme.textSecondary)
-                    .frame(width: 22, alignment: .leading)
-                LevelMeterView(
-                    rmsDB: meters.inputRMSDB,
-                    peakDB: meters.inputPeakDB,
-                    orientation: .horizontal,
-                    width: 12
-                )
-                Text(meters.inputPeakDB > -120
-                     ? String(format: "%.1f", meters.inputPeakDB)
-                     : "—")
-                    .font(Theme.valueFont)
-                    .foregroundColor(Theme.textSecondary)
-                    .frame(width: 40, alignment: .trailing)
-                    .monospacedDigit()
-            }
-            .frame(height: 14)
-
-            HStack(spacing: 4) {
-                Text("OUT")
-                    .font(Theme.captionFont)
-                    .foregroundColor(Theme.textSecondary)
-                    .frame(width: 22, alignment: .leading)
-                LevelMeterView(
-                    rmsDB: meters.outputRMSDB,
-                    peakDB: meters.outputPeakDB,
-                    orientation: .horizontal,
-                    width: 12
-                )
-                Text(meters.outputPeakDB > -120
-                     ? String(format: "%.1f", meters.outputPeakDB)
-                     : "—")
-                    .font(Theme.valueFont)
-                    .foregroundColor(Theme.textSecondary)
-                    .frame(width: 40, alignment: .trailing)
-                    .monospacedDigit()
-            }
-            .frame(height: 14)
+        VStack(spacing: 4) {
+            meterLine("IN", rms: meters.inputRMSDB, peak: meters.inputPeakDB)
+            meterLine("OUT", rms: meters.outputRMSDB, peak: meters.outputPeakDB)
         }
+    }
+
+    @ViewBuilder
+    private func meterLine(_ label: String, rms: Float, peak: Float) -> some View {
+        HStack(spacing: 6) {
+            Text(label)
+                .font(Theme.captionFont)
+                .foregroundColor(Theme.textSecondary)
+                .frame(width: 26, alignment: .leading)
+            LevelMeterView(rmsDB: rms, peakDB: peak, orientation: .horizontal, width: 12)
+                .frame(height: 12)
+            ValueText(
+                text: peak > -120 ? String(format: "%.1f", peak) : "—",
+                width: 44,
+                colour: Theme.textSecondary)
+        }
+        .frame(height: 16)
     }
 }
 

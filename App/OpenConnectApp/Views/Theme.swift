@@ -40,6 +40,31 @@ enum Theme {
     static let titleFont  = Font.system(size: 12, weight: .semibold)
 }
 
+// MARK: - Stable numeric readout
+//
+// Every live number in this UI is a layout hazard: "+0.0 dB" and "-12.5 dB" are
+// different widths, so a value that updates thirty times a second drags its
+// neighbours around with it. Anything that displays a changing number must go
+// through this view, which pins the width and uses monospaced digits so the
+// glyphs themselves do not change size either.
+
+struct ValueText: View {
+    let text: String
+    var width: CGFloat = 72
+    var colour: Color = Theme.textPrimary
+    var alignment: Alignment = .trailing
+
+    var body: some View {
+        Text(text)
+            .font(Theme.valueFont)
+            .monospacedDigit()
+            .foregroundColor(colour)
+            .lineLimit(1)
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(width: width, alignment: alignment)
+    }
+}
+
 // MARK: - dB formatting
 
 func formatDB(_ v: Float, decimals: Int = 1) -> String {
@@ -150,18 +175,18 @@ struct ParamSliderRow: View {
             Text(label)
                 .font(Theme.labelFont)
                 .foregroundColor(enabled ? Theme.textSecondary : Theme.textDisabled)
+                .lineLimit(1)
                 .frame(width: 72, alignment: .leading)
             Slider(value: value, in: range)
                 .disabled(!enabled)
                 .tint(enabled ? Theme.accent : Theme.textDisabled)
                 .accessibilityLabel(Text(label))
                 .accessibilityValue(Text(format(value.wrappedValue)))
-            Text(format(value.wrappedValue))
-                .font(Theme.valueFont)
-                .foregroundColor(enabled ? Theme.textPrimary : Theme.textDisabled)
-                .frame(width: 72, alignment: .trailing)
-                .monospacedDigit()
+            ValueText(
+                text: format(value.wrappedValue),
+                colour: enabled ? Theme.textPrimary : Theme.textDisabled)
         }
+        .frame(height: 22)
         .opacity(enabled ? 1 : 0.5)
     }
 }

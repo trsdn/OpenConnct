@@ -210,10 +210,11 @@ struct ChannelStripView: View {
                 .font(.system(size: 14))
 
             // dB readout for fader
-            Text(formatDB(settings.faderDB, decimals: 1))
-                .font(Theme.valueFont)
-                .foregroundColor(effectivelyMuted ? Theme.textDisabled : Theme.textPrimary)
-                .monospacedDigit()
+            ValueText(
+                text: formatDB(settings.faderDB, decimals: 1),
+                width: 64,
+                colour: effectivelyMuted ? Theme.textDisabled : Theme.textPrimary,
+                alignment: .center)
 
             // Fader + meter side by side
             HStack(spacing: 4) {

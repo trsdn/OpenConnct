@@ -11,7 +11,9 @@ private struct EffectHeader: View {
 
     var body: some View {
         HStack(spacing: 8) {
-            // Enable toggle (pill)
+            // Enable toggle (pill). Deliberately its own hit target: the row
+            // used to carry a tap gesture as well, so switching an effect on
+            // also expanded the panel and everything below it moved.
             Button(action: onToggleEnabled) {
                 Circle()
                     .fill(isEnabled ? Theme.accent : Theme.raised)
@@ -22,29 +24,32 @@ private struct EffectHeader: View {
                             lineWidth: 1
                         )
                     )
+                    .frame(width: 22, height: 22)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .accessibilityLabel(Text(title))
             .accessibilityValue(Text(isEnabled ? "On" : "Off"))
             .accessibilityHint(Text(isEnabled ? "Tap to disable" : "Tap to enable"))
 
-            Text(title)
-                .font(Theme.titleFont)
-                .foregroundColor(isEnabled ? Theme.textPrimary : Theme.textSecondary)
-                .frame(maxWidth: .infinity, alignment: .leading)
-
-            // Disclosure chevron
             Button(action: onToggleExpand) {
-                Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundColor(Theme.textSecondary)
-                    .frame(width: 20, height: 20)
+                HStack(spacing: 8) {
+                    Text(title)
+                        .font(Theme.titleFont)
+                        .lineLimit(1)
+                        .foregroundColor(isEnabled ? Theme.textPrimary : Theme.textSecondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundColor(Theme.textSecondary)
+                        .frame(width: 20)
+                }
+                .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .accessibilityLabel(Text(isExpanded ? "Collapse \(title)" : "Expand \(title)"))
         }
-        .contentShape(Rectangle())
-        .onTapGesture(perform: onToggleExpand)
+        .frame(height: 24)
     }
 }
 
@@ -54,19 +59,18 @@ private struct GRStrip: View {
     let reductionDB: Float
 
     var body: some View {
-        HStack(spacing: 4) {
+        HStack(spacing: 6) {
             Text("GR")
                 .font(Theme.captionFont)
                 .foregroundColor(Theme.textSecondary)
-                .frame(width: 20, alignment: .leading)
+                .frame(width: 24, alignment: .leading)
             GainReductionMeterView(reductionDB: reductionDB, orientation: .horizontal, width: 8)
-            Text(reductionDB > 0.1 ? String(format: "−%.1f dB", reductionDB) : "—")
-                .font(Theme.valueFont)
-                .foregroundColor(Theme.textSecondary)
-                .frame(width: 56, alignment: .trailing)
-                .monospacedDigit()
+                .frame(height: 8)
+            ValueText(
+                text: reductionDB > 0.1 ? String(format: "−%.1f dB", reductionDB) : "—",
+                colour: Theme.textSecondary)
         }
-        .frame(height: 12)
+        .frame(height: 22)
     }
 }
 
