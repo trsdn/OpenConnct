@@ -326,11 +326,12 @@ OPENCONNECT_SOAK_LOG=60 /Applications/OpenConnect.app/Contents/MacOS/OpenConnect
 OPENCONNECT_METER_HZ=0 /Applications/OpenConnect.app/Contents/MacOS/OpenConnect
 ```
 
-**What the app should cost when idle.** With three microphones live and the window open, expect
-roughly **5–6% of one core**; with `OPENCONNECT_METER_HZ=0` it drops to under 1%. The difference is
-entirely the level bars being drawn. If you see substantially more than 6% with the window open,
-that is worth reporting — it used to be 22% before the meters were rewritten, and a regression
-there would look exactly the same.
+**What the app should cost.** With three microphones live and the window open, expect roughly
+**5–6% of one core in a quiet room**, and around **11% while someone is actually talking** — the
+difference is the level bars moving, because a bar that does not change is not redrawn at all. With
+`OPENCONNECT_METER_HZ=0` it drops to under 1% either way. If you see substantially more than that,
+it is worth reporting: it used to be 22% before the meters were rewritten, and a regression would
+look exactly the same.
 
 Running the binary directly like this puts its log on your terminal. Launching the app normally from
 Finder does **not** show these messages anywhere.
