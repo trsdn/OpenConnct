@@ -321,10 +321,16 @@ OPENCONNECT_SOAK_LOG=60 /Applications/OpenConnect.app/Contents/MacOS/OpenConnect
 
 ```bash
 # Meter refresh rate in Hz; default 20, and 0 disables the meters entirely.
-# With meters off the whole app measures 0.5% of one core with both mics live,
-# which is how we established that the CPU cost is drawing, not audio.
+# With meters off the whole app measures under 1% of one core with the mics
+# live, which is how we established that the CPU cost is drawing, not audio.
 OPENCONNECT_METER_HZ=0 /Applications/OpenConnect.app/Contents/MacOS/OpenConnect
 ```
+
+**What the app should cost when idle.** With three microphones live and the window open, expect
+roughly **5–6% of one core**; with `OPENCONNECT_METER_HZ=0` it drops to under 1%. The difference is
+entirely the level bars being drawn. If you see substantially more than 6% with the window open,
+that is worth reporting — it used to be 22% before the meters were rewritten, and a regression
+there would look exactly the same.
 
 Running the binary directly like this puts its log on your terminal. Launching the app normally from
 Finder does **not** show these messages anywhere.
