@@ -27,10 +27,14 @@ import SwiftUI
 //
 //   AppKit meters, 943x980 window ............................. 6.2 %
 //   AppKit meters, zoomed to 5120x1344 (7x the area) .......... 6.2 %
+//   the same, each meter given its own backing layer .......... 5.6 %
 //
 // Flat in window area, which is the proof the dirty rectangles are now the
-// meters themselves. For reference the engine — three microphones, full DSP
-// chain, resampling, drift control and mixing — is the 0.7 % floor above.
+// meters themselves. The last line is `wantsLayer`: without a layer of its own
+// a meter's repaint is merged into the enclosing one and the compositor still
+// redraws more than the bar. For reference the engine — three microphones,
+// full DSP chain, resampling, drift control and mixing — is the 0.7 % floor
+// above, so what remains is still drawing, not audio.
 //
 // `OPENCONNECT_METER_HZ` remains, to measure and to switch meters off entirely.
 
@@ -52,7 +56,16 @@ final class ChannelMeterSource: ObservableObject {
     /// point — anything needing full rate subscribes instead.
     private(set) var live = ChannelMeters()
 
-    private var listeners: [ObjectIdentifier: (ChannelMeters) -> Void] = [:]
+    /// Subscribers, keyed by object identity so a view can replace or remove
+    /// its own entry. The owner is held weakly and dead entries are pruned on
+    /// publish: a view that is deallocated without unsubscribing (a window
+    /// closing out from under it, say) must not keep this alive or accumulate.
+    private struct Listener {
+        weak var owner: AnyObject?
+        let fn: (ChannelMeters) -> Void
+    }
+
+    private var listeners: [ObjectIdentifier: Listener] = [:]
     private var textTick = 0
 
     /// Publish text this many meter ticks apart, so the numbers land near 5 Hz
@@ -64,7 +77,7 @@ final class ChannelMeterSource: ObservableObject {
     }()
 
     func subscribe(_ owner: AnyObject, _ fn: @escaping (ChannelMeters) -> Void) {
-        listeners[ObjectIdentifier(owner)] = fn
+        listeners[ObjectIdentifier(owner)] = Listener(owner: owner, fn: fn)
         fn(live)
     }
 
@@ -74,7 +87,12 @@ final class ChannelMeterSource: ObservableObject {
 
     func publish(_ next: ChannelMeters) {
         live = next
-        for fn in listeners.values { fn(next) }
+        var dead: [ObjectIdentifier] = []
+        for (key, listener) in listeners {
+            guard listener.owner != nil else { dead.append(key); continue }
+            listener.fn(next)
+        }
+        for key in dead { listeners.removeValue(forKey: key) }
 
         textTick += 1
         guard textTick >= Self.textDivider else { return }

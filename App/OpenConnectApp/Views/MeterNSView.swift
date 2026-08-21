@@ -71,15 +71,21 @@ final class MeterNSView: NSView {
 
     override var isFlipped: Bool { false }
 
+    override init(frame: NSRect) {
+        super.init(frame: frame)
+        // Give the meter its own backing layer. Without one the repaint is
+        // merged into the enclosing layer and the compositor redraws far more
+        // than the bar; with one, only this layer is re-rendered and blended.
+        wantsLayer = true
+        layerContentsRedrawPolicy = .onSetNeedsDisplay
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError("not loaded from a nib") }
+
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
         subscribeIfVisible()
-    }
-
-    deinit {
-        // ChannelMeterSource holds subscribers weakly by identity, so this is
-        // belt and braces rather than strictly required.
-        MainActor.assumeIsolated { source?.unsubscribe(self) }
     }
 
     private func subscribeIfVisible() {
