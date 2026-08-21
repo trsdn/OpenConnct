@@ -26,6 +26,10 @@ final class AudioEngine {
     private var outputUnit: AudioUnit?
     private var inputs: [UnsafeMutablePointer<InputRT>] = []
     private var boundDevices: [AudioInputDevice] = []
+    /// Running dropout total as of the last diagnostics poll, and when it last
+    /// grew. Used to report *recent* dropouts rather than lifetime ones.
+    private var lastDropoutTotal: UInt64 = 0
+    private var lastDropoutAt: Date?
     /// Every physical input currently attached, before the user's selection is
     /// applied. Kept so the selection UI can offer devices we are not using.
     private(set) var availableDevices: [AudioInputDevice] = []
@@ -174,6 +178,10 @@ final class AudioEngine {
 
             // Only now is it safe for the render callback to see these channels.
             rt.pointee.channelCount = Int32(usable.count)
+            // The per-channel counters were just zeroed, so the running total the
+            // dropout-recency check compares against has to be zeroed with them,
+            // or the next poll sees a large negative delta.
+            lastDropoutTotal = 0
             onDevicesChanged?(usable)
         }
 
@@ -422,8 +430,24 @@ final class AudioEngine {
             diagnostics.perChannelMaxInputGapUS[device.uid] = channel.pointee.maxInputGapUS
             channel.pointee.maxInputGapUS = 0
         }
+
+        // Recency, not the lifetime total. See EngineDiagnostics for why.
+        let total = UInt64(diagnostics.underruns) + UInt64(diagnostics.overruns)
+        if total > lastDropoutTotal {
+            lastDropoutTotal = total
+            lastDropoutAt = Date()
+        }
+        if let at = lastDropoutAt {
+            diagnostics.hasRecentDropout = -at.timeIntervalSinceNow < Self.dropoutWarningWindow
+        }
+
         return diagnostics
     }
+
+    /// How long the dropout warning stays lit after the last one, in seconds.
+    /// Long enough that a single blip is readable, short enough that it is
+    /// clearly about now and not about an hour ago.
+    private static let dropoutWarningWindow: Double = 10
 
     // MARK: - Formats
 

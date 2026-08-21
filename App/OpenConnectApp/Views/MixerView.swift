@@ -45,7 +45,10 @@ private struct DiagnosticsBar: View {
     private var status: Status {
         if !diagnostics.running { return .stopped }
         if !diagnostics.sinkAvailable { return .noDriver }
-        if diagnostics.underruns > 0 || diagnostics.overruns > 0 { return .glitching }
+        // Recent, not ever. Binding and priming the microphones costs a handful
+        // of dropouts on every launch; testing the lifetime total lights this
+        // warning at startup and never clears it.
+        if diagnostics.hasRecentDropout { return .glitching }
         return .ready
     }
 
@@ -107,7 +110,11 @@ private struct DiagnosticsDetail: View {
 
             row("Dropouts",
                 value: "\(diagnostics.underruns + diagnostics.overruns)",
-                help: "Times audio arrived too late or too early to be used. Should stay at 0.")
+                help: "Times audio arrived too late or too early to be used, "
+                    + "counted since the app started. A few while the microphones "
+                    + "are being connected are normal; the number should then stop "
+                    + "growing. If it keeps climbing while you are talking, that is "
+                    + "a fault.")
 
             row("Dropped edits",
                 value: "\(diagnostics.droppedParameters)",
@@ -120,7 +127,9 @@ private struct DiagnosticsDetail: View {
                     .foregroundColor(Theme.textSecondary)
                 Text("Each USB microphone runs on its own crystal, slightly off 48 kHz. "
                      + "This is how hard OpenConnect is stretching that mic to keep it in sync, "
-                     + "in parts per million. Anything under 100 is normal.")
+                     + "in parts per million. Anything under 100 is normal once it has settled. "
+                     + "Just after a microphone is connected the figure swings wide for up to a "
+                     + "minute while it finds the right rate; that is expected.")
                     .font(Theme.captionFont)
                     .foregroundColor(Theme.textDisabled)
                     .fixedSize(horizontal: false, vertical: true)

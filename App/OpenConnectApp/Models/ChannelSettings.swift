@@ -123,6 +123,23 @@ struct EngineDiagnostics: Equatable {
     var sinkAvailable: Bool = false
     var underruns: UInt32 = 0
     var overruns: UInt32 = 0
+    /// True when a dropout happened within the last few seconds.
+    ///
+    /// The totals above are counted for the lifetime of the channel, which makes
+    /// them useless as a *status*: binding a device and priming its ring costs a
+    /// handful of dropouts every single launch, so any "underruns > 0" test
+    /// latches a warning on startup and never clears it. Measured on the
+    /// development machine: 11 dropouts during startup, then flat for the next
+    /// twelve minutes while the warning stayed lit. That is a permanent false
+    /// alarm about the exact fault this project exists to eliminate.
+    ///
+    /// Recency is the honest signal. It is deliberately a Bool and not "seconds
+    /// since", because this struct is compared for equality before it is
+    /// published to the interface — a field that changes on every poll would
+    /// defeat that and redraw the status line forever. A Bool changes twice per
+    /// event. The lifetime totals stay in the details panel, where a cumulative
+    /// count is what you actually want.
+    var hasRecentDropout: Bool = false
     var droppedParameters: UInt32 = 0
     var perChannelRatioPPM: [String: Double] = [:]
     var perChannelFill: [String: Double] = [:]
