@@ -392,6 +392,24 @@ let ocOutputRenderCallback: AURenderCallback = {
             channel.pointee.resampler, channel.pointee.ring, channel.pointee.pulled, UInt32(frames))
         if produced < UInt32(frames) {
             channel.pointee.underruns &+= 1
+
+            // Zero the tail the resampler could not fill, so a short pull leaves
+            // silence rather than the previous block's stale samples.
+            let start = Int(produced)
+            memset(channel.pointee.pulled + start, 0,
+                   (frames - start) * MemoryLayout<Float>.size)
+
+            // A genuinely empty ring means the device stalled or was pulled.
+            // Re-prime rather than limp along underrunning every block: drop
+            // back to inactive so the input side rebuilds the cushion, and
+            // reset the controller so a wound-up integrator is not carried
+            // into the new run.
+            if oc_ring_buffer_fill_level(channel.pointee.ring) == 0 {
+                channel.pointee.active = 0
+                ocConfigureDriftController(channel.pointee.drift)
+                oc_resampler_init(channel.pointee.resampler,
+                                  channel.pointee.nativeSampleRate / outputRate)
+            }
         }
 
         // 2c. Full DSP chain, in bounded chunks.
@@ -503,7 +521,23 @@ let ocInputRenderCallback: AURenderCallback = {
         // fill level back down over the next few seconds.
         input.pointee.channel.pointee.overruns &+= 1
     }
-    input.pointee.channel.pointee.active = 1
+
+    // Priming. The output side must not start draining this ring until it holds
+    // a full cushion.
+    //
+    // Marking the channel active on the first input block — which is what this
+    // used to do — leaves the ring holding exactly one hardware period. The
+    // resampler needs slightly *more* input than output for its interpolation
+    // window, so every single pull came up short: on real hardware this produced
+    // ~190 underruns per second per channel, forever, and drove the drift
+    // controller's integrator to its limit chasing a fill level it had no way to
+    // reach. The controller can only bend the consumption rate by parts per
+    // million; it cannot conjure the initial cushion. Priming is the only fix.
+    if input.pointee.channel.pointee.active == 0 {
+        if oc_ring_buffer_fill_level(input.pointee.channel.pointee.ring) >= UInt32(kRingTargetFill) {
+            input.pointee.channel.pointee.active = 1
+        }
+    }
 
     return noErr
 }
