@@ -159,6 +159,26 @@ macOS will ask for microphone access the first time. **You must allow it.** If y
 prompt the app will run but capture silence, which looks identical to a broken driver. If you
 dismissed it by accident, re-enable under System Settings → Privacy & Security → Microphone.
 
+> **How to tell this apart from a driver fault.** A denied microphone is silent in the log, not
+> loud: the engine never starts at all, so the app window opens normally and nothing is obviously
+> wrong. Check it directly — the following prints nothing at all when permission is missing, and
+> many lines when the engine is running:
+>
+> ```bash
+> log show --last 2m --predicate 'process == "OpenConnect"' --style compact | grep -c AUHAL
+> ```
+>
+> If that prints `0`, it is permission, not the driver. Reset the app's own entry and relaunch to
+> get a fresh prompt (this touches only this app):
+>
+> ```bash
+> tccutil reset Microphone audio.openconnect.app
+> ```
+>
+> The build signs the app with a Developer ID so the grant survives rebuilds. If `make` warned
+> `no Developer ID Application identity`, the app is ad-hoc signed instead and macOS will re-ask
+> after **every** rebuild, orphaning the previous grant — that is expected in that case, not a bug.
+
 ### Record the native format
 
 We need to know exactly what the device presents, because the app deliberately captures at each
