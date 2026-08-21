@@ -4,6 +4,7 @@ import SwiftUI
 
 private struct GainStepButton: View {
     let symbol: String
+    let label: String
     let action: () -> Void
 
     var body: some View {
@@ -15,6 +16,7 @@ private struct GainStepButton: View {
                 .background(RoundedRectangle(cornerRadius: Theme.radiusSmall).fill(Theme.raised))
         }
         .buttonStyle(.plain)
+        .accessibilityLabel(Text(label))
     }
 }
 
@@ -34,7 +36,7 @@ private struct GainRow: View {
                 .foregroundColor(Theme.textSecondary)
                 .frame(width: 36, alignment: .leading)
 
-            GainStepButton(symbol: "minus") {
+            GainStepButton(symbol: "minus", label: "Decrease gain") {
                 let next = max(gainRange.lowerBound, settings.gainDB - stepDB)
                 store.update(settings.deviceUID) { $0.gainDB = next }
             }
@@ -45,7 +47,7 @@ private struct GainRow: View {
                 .frame(width: 64, alignment: .center)
                 .monospacedDigit()
 
-            GainStepButton(symbol: "plus") {
+            GainStepButton(symbol: "plus", label: "Increase gain") {
                 let next = min(gainRange.upperBound, settings.gainDB + stepDB)
                 store.update(settings.deviceUID) { $0.gainDB = next }
             }
@@ -57,6 +59,8 @@ private struct GainRow: View {
             )
             .tint(Theme.accent)
             .frame(maxWidth: .infinity)
+            .accessibilityLabel(Text("Gain"))
+            .accessibilityValue(Text(formatDB(settings.gainDB, decimals: 1)))
         }
     }
 }
@@ -79,6 +83,8 @@ private struct PadRow: View {
                 Text(settings.padEnabled ? formatDB(settings.padDB, decimals: 0) : "Off")
             }
             .toggleStyle(PillToggleStyle())
+            .accessibilityLabel(Text("Pad"))
+            .accessibilityValue(Text(settings.padEnabled ? formatDB(settings.padDB, decimals: 1) : "Off"))
 
             if settings.padEnabled {
                 Slider(
@@ -88,6 +94,8 @@ private struct PadRow: View {
                 )
                 .tint(Theme.accent)
                 .frame(maxWidth: .infinity)
+                .accessibilityLabel(Text("Pad level"))
+                .accessibilityValue(Text(formatDB(settings.padDB, decimals: 1)))
 
                 Text(formatDB(settings.padDB, decimals: 1))
                     .font(Theme.valueFont)
@@ -131,6 +139,8 @@ private struct HPFRow: View {
                                 )
                         }
                         .buttonStyle(.plain)
+                        .accessibilityLabel(Text("HPF \(mode.label)"))
+                        .accessibilityAddTraits(settings.hpfMode == mode ? .isSelected : [])
                     }
                 }
                 Spacer()
@@ -149,6 +159,8 @@ private struct HPFRow: View {
                         in: 20...500
                     )
                     .tint(Theme.accent)
+                    .accessibilityLabel(Text("HPF Frequency"))
+                    .accessibilityValue(Text(formatHz(settings.hpfFrequency)))
                     Text(formatHz(settings.hpfFrequency))
                         .font(Theme.valueFont)
                         .foregroundColor(Theme.textPrimary)

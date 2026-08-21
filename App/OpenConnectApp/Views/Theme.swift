@@ -154,6 +154,8 @@ struct ParamSliderRow: View {
             Slider(value: value, in: range)
                 .disabled(!enabled)
                 .tint(enabled ? Theme.accent : Theme.textDisabled)
+                .accessibilityLabel(Text(label))
+                .accessibilityValue(Text(format(value.wrappedValue)))
             Text(format(value.wrappedValue))
                 .font(Theme.valueFont)
                 .foregroundColor(enabled ? Theme.textPrimary : Theme.textDisabled)

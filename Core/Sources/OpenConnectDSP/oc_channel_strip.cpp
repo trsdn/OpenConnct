@@ -130,12 +130,17 @@ oc_meter_values oc_channel_strip_output_meter(const oc_channel_strip *strip)
     return oc_meter_read(&strip->output_meter);
 }
 
+// A bypassed stage reports no reduction. Without this the stage's last value
+// persists -- and an untouched gate initialises to -120 dB (fully closed) --
+// so a disabled gate would drive its meter to full deflection.
 oc_float oc_channel_strip_gate_gr_db(const oc_channel_strip *strip)
 {
+    if (strip->bypass_gate) return 0.0f;
     return oc_gate_gain_reduction_db(&strip->gate);
 }
 
 oc_float oc_channel_strip_comp_gr_db(const oc_channel_strip *strip)
 {
+    if (strip->bypass_compressor) return 0.0f;
     return oc_compressor_gain_reduction_db(&strip->compressor);
 }

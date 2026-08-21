@@ -24,6 +24,9 @@ private struct EffectHeader: View {
                     )
             }
             .buttonStyle(.plain)
+            .accessibilityLabel(Text(title))
+            .accessibilityValue(Text(isEnabled ? "On" : "Off"))
+            .accessibilityHint(Text(isEnabled ? "Tap to disable" : "Tap to enable"))
 
             Text(title)
                 .font(Theme.titleFont)
@@ -38,6 +41,7 @@ private struct EffectHeader: View {
                     .frame(width: 20, height: 20)
             }
             .buttonStyle(.plain)
+            .accessibilityLabel(Text(isExpanded ? "Collapse \(title)" : "Expand \(title)"))
         }
         .contentShape(Rectangle())
         .onTapGesture(perform: onToggleExpand)
@@ -90,7 +94,7 @@ struct GatePanel: View {
 
                 if expanded {
                     VStack(spacing: 6) {
-                        GRStrip(reductionDB: meters.gateReductionDB)
+                        GRStrip(reductionDB: -meters.gateReductionDB)
 
                         ParamSliderRow(
                             "Threshold",
@@ -163,7 +167,7 @@ struct CompressorPanel: View {
 
                 if expanded {
                     VStack(spacing: 6) {
-                        GRStrip(reductionDB: meters.compressorReductionDB)
+                        GRStrip(reductionDB: -meters.compressorReductionDB)
 
                         ParamSliderRow(
                             "Threshold",

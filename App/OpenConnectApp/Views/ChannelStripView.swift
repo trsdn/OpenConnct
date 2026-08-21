@@ -74,7 +74,7 @@ struct VerticalFader: View {
                     .frame(width: 14, height: 1)
                     .offset(y: unityY - 0.5)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-                // Thumb
+                // Thumb — double-click resets to unity (0 dB); drag adjusts level
                 RoundedRectangle(cornerRadius: Theme.radiusSmall)
                     .fill(Theme.raised)
                     .overlay(
@@ -84,6 +84,9 @@ struct VerticalFader: View {
                     .frame(width: 28, height: thumbH)
                     .offset(y: thumbY)
                     .frame(maxWidth: .infinity, alignment: .center)
+                    .onTapGesture(count: 2) {
+                        onChange(0)
+                    }
                     .gesture(
                         DragGesture(minimumDistance: 0)
                             .onChanged { value in
@@ -98,6 +101,16 @@ struct VerticalFader: View {
                             }
                             .onEnded { _ in dragStartNorm = nil }
                     )
+            }
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Fader")
+        .accessibilityValue(Text(formatDB(db, decimals: 1)))
+        .accessibilityAdjustableAction { direction in
+            switch direction {
+            case .increment: onChange(min(faderMax, db + 1))
+            case .decrement: onChange(max(faderMin, db - 1))
+            @unknown default: break
             }
         }
     }
@@ -135,6 +148,9 @@ private struct MuteButton: View {
         }
         .buttonStyle(.plain)
         .help(muted ? "Unmute" : "Mute")
+        .accessibilityLabel(Text("Mute"))
+        .accessibilityValue(Text(muted ? "On" : effectivelyMuted ? "Silenced by solo" : "Off"))
+        .accessibilityAddTraits(muted ? .isSelected : [])
     }
 }
 
@@ -157,6 +173,9 @@ private struct SoloButton: View {
         }
         .buttonStyle(.plain)
         .help(soloed ? "Un-solo" : "Solo")
+        .accessibilityLabel(Text("Solo"))
+        .accessibilityValue(Text(soloed ? "On" : "Off"))
+        .accessibilityAddTraits(soloed ? .isSelected : [])
     }
 }
 

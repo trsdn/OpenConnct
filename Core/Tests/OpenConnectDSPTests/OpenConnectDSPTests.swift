@@ -556,4 +556,33 @@ final class OpenConnectDSPTests: XCTestCase {
             XCTAssertTrue(out.allSatisfy { $0.isFinite && abs($0) < 8 })
         }
     }
+
+    // A bypassed stage must report zero gain reduction. An untouched gate
+    // initialises its reduction to -120 dB (fully closed), so if bypass were
+    // ignored a disabled gate would peg its meter at full deflection.
+    func testBypassedStagesReportNoGainReduction() {
+        var strip = oc_channel_strip()
+        oc_channel_strip_init(&strip, Double(sr))
+        oc_channel_strip_set_bypasses(&strip, 1, 1, 1, 1)
+
+        XCTAssertEqual(oc_channel_strip_gate_gr_db(&strip), 0, "bypassed gate must report no reduction")
+        XCTAssertEqual(oc_channel_strip_comp_gr_db(&strip), 0, "bypassed compressor must report no reduction")
+
+        // Run loud audio through the enabled stages so they actually engage,
+        // then bypass again and confirm the stale value is not reported.
+        oc_channel_strip_set_bypasses(&strip, 0, 0, 1, 1)
+        oc_compressor_configure(&strip.compressor, -40, 8, 1, 50, 0, 6, OC_DETECTOR_PEAK)
+        let loud = (0..<4800).map { 0.9 * sin(2 * Float.pi * 220 * Float($0) / sr) }
+        var out = Array(repeating: Float(0), count: loud.count)
+        loud.withUnsafeBufferPointer { ib in
+            out.withUnsafeMutableBufferPointer { ob in
+                oc_channel_strip_process(&strip, ib.baseAddress!, ob.baseAddress!, UInt32(loud.count))
+            }
+        }
+        XCTAssertLessThan(oc_channel_strip_comp_gr_db(&strip), 0, "engaged compressor should show negative-going reduction")
+
+        oc_channel_strip_set_bypasses(&strip, 1, 1, 1, 1)
+        XCTAssertEqual(oc_channel_strip_gate_gr_db(&strip), 0)
+        XCTAssertEqual(oc_channel_strip_comp_gr_db(&strip), 0)
+    }
 }

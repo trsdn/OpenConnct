@@ -32,6 +32,13 @@ jobs:
       - name: Build driver
         run: make driver
 
+      # Exercises the driver's property dispatch and IO round trip through the
+      # real AudioServerPlugIn vtable via dlopen. This is the only automated
+      # check of driver *behaviour*: installing it for real needs sudo and a
+      # coreaudiod restart, which CI cannot do.
+      - name: Test driver (offline harness)
+        run: make test-driver
+
       - name: Build app (universal)
         run: make build UNIVERSAL=1
 

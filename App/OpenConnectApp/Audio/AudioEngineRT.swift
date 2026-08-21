@@ -18,6 +18,29 @@ let kRingCapacity: UInt32 = 32768
 /// enough to absorb USB scheduling jitter, small enough to keep latency low.
 let kRingTargetFill: Float = 1536
 
+/// Applies the drift controller tuning.
+///
+/// This is the single definition of the PI tuning. It is applied both when a
+/// channel is first allocated and again whenever a channel is rebound to a new
+/// device, so it must not be duplicated at the call sites — retuning one copy
+/// and not the other would make behaviour depend on whether a rebind had
+/// happened.
+///
+/// The gains are deliberately gentle: the correction must stay in the
+/// parts-per-million range so it can never be heard. The integrator and the
+/// ratio are clamped and the output is slew-limited so that no transient can
+/// produce an audible step.
+func ocConfigureDriftController(_ drift: UnsafeMutablePointer<oc_drift_controller>) {
+    oc_drift_controller_init(
+        drift,
+        kRingTargetFill,
+        /* kp */ 2.0e-7,
+        /* ki */ 4.0e-9,
+        /* integrator_limit */ 5.0e-4,
+        /* ratio_limit */ 1.0e-3,
+        /* slew_per_update */ 2.0e-6)
+}
+
 // MARK: - Parameter mirror
 //
 // The render thread cannot read Swift objects, so every parameter it needs is
@@ -158,17 +181,7 @@ enum RTAlloc {
         channel.resampler = resampler
 
         let drift = UnsafeMutablePointer<oc_drift_controller>.allocate(capacity: 1)
-        // Deliberately gentle: the correction must stay in the parts-per-million
-        // range so it can never be heard. The integrator and ratio are clamped
-        // and slew-limited so a transient cannot produce an audible step.
-        oc_drift_controller_init(
-            drift,
-            kRingTargetFill,
-            /* kp */ 2.0e-7,
-            /* ki */ 4.0e-9,
-            /* integrator_limit */ 5.0e-4,
-            /* ratio_limit */ 1.0e-3,
-            /* slew_per_update */ 2.0e-6)
+        ocConfigureDriftController(drift)
         channel.drift = drift
 
         let pulled = UnsafeMutablePointer<Float>.allocate(capacity: kMaxFrames)

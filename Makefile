@@ -1,4 +1,4 @@
-.PHONY: all build driver clean run test install-driver uninstall-driver
+.PHONY: all build driver clean run test test-driver test-all install-driver uninstall-driver
 
 APP_NAME       = OpenConnect
 DRIVER_NAME    = OpenConnect
@@ -85,9 +85,19 @@ embed-driver: build driver
 test:
 	cd Core && swift test
 
+# Loads the driver with dlopen and drives the AudioServerPlugIn vtable directly
+# against a fake host, so property dispatch and the IO round trip can be
+# verified without sudo, without coreaudiod, and in CI. The script compiles its
+# own copy of the driver with the same flags, so it has no bundle prerequisite.
+test-driver:
+	./tools/driver_harness/build_and_run.sh
+
+test-all: test test-driver
+
 clean:
 	rm -rf $(DIST_DIR)
 	rm -rf Core/.build
+	rm -rf tools/driver_harness/build
 
 run: build
 	@open $(APP_BUNDLE)

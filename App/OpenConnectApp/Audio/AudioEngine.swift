@@ -104,9 +104,7 @@ final class AudioEngine {
                 channel.pointee.overruns = 0
                 oc_channel_strip_init(channel.pointee.strip, sampleRate)
                 oc_resampler_init(channel.pointee.resampler, device.nominalSampleRate / sampleRate)
-                oc_drift_controller_init(
-                    channel.pointee.drift,
-                    kRingTargetFill, 2.0e-7, 4.0e-9, 5.0e-4, 1.0e-3, 2.0e-6)
+                ocConfigureDriftController(channel.pointee.drift)
                 if let input = makeInputUnit(for: device, channel: channel) {
                     inputs.append(input)
                 }
