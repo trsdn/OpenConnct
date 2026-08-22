@@ -59,8 +59,10 @@ Application Support directory is renamed on first launch.
 
 ### Release install (recommended)
 
-Download the latest release from the GitHub Releases page and drag
-**`OpenConnct.app`** to `/Applications`.
+Download the DMG from the [latest release](https://github.com/trsdn/OpenConnct/releases/latest)
+and drag **`OpenConnct.app`** to `/Applications`. Drag it — do not run it from
+the mounted disk image, or macOS launches it from a randomised read-only copy
+and the driver installer has nothing sensible to install from.
 
 The app carries the CoreAudio driver inside its own bundle. On first launch it
 notices that nothing is installed at `/Library/Audio/Plug-Ins/HAL` and offers to
@@ -99,12 +101,13 @@ reading the script. In `/Applications` it takes an administrator to modify the
 app; in `~/Downloads` or on a USB stick it does not. `SECURITY.md` sets out the
 reasoning in full.
 
-### Legacy: standalone driver package
+### Alternative: standalone driver package
 
-Earlier releases shipped a separate `OpenConnct-driver.pkg`. It still works and
-still places the driver at `/Library/Audio/Plug-Ins/HAL/OpenConnct.driver`, but
-it does *not* restart CoreAudio, so after installing you must either reboot or
-run:
+`scripts/make_pkg.sh` builds a separate `OpenConnct-driver.pkg`, which places the
+driver at `/Library/Audio/Plug-Ins/HAL/OpenConnct.driver` without going through
+the app. Releases do not ship it — the in-app installer covers the same ground
+and restarts CoreAudio for you. The package does *not*, so after installing it
+you must either reboot or run:
 
 ```bash
 sudo killall -9 coreaudiod
