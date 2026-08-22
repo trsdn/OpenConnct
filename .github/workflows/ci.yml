@@ -1,0 +1,46 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  core:
+    name: Swift package
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build Core
+        working-directory: Core
+        run: swift build
+
+      - name: Test Core
+        working-directory: Core
+        run: swift test
+
+  build:
+    name: Driver and app
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Unsigned, so this needs no secrets. It exists to catch compile breaks in
+      # the HAL plug-in and the app, which the Core package alone cannot.
+      - name: Build driver
+        run: make driver
+
+      # Exercises the driver's property dispatch and IO round trip through the
+      # real AudioServerPlugIn vtable via dlopen. This is the only automated
+      # check of driver *behaviour*: installing it for real needs sudo and a
+      # coreaudiod restart, which CI cannot do.
+      - name: Test driver (offline harness)
+        run: make test-driver
+
+      - name: Build app (universal)
+        run: make build UNIVERSAL=1
+
+      - name: Stage embedded driver
+        run: make embed-driver UNIVERSAL=1

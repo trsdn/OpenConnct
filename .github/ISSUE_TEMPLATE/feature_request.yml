@@ -1,0 +1,47 @@
+name: Feature request
+description: Suggest a capability or a change in behaviour.
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: What are you unable to do today? Describe the situation, not the solution you have in mind.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What you would like
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Which part
+      options:
+        - Signal processing
+        - Mixer or channel strips
+        - Metering
+        - Device handling
+        - Virtual audio device
+        - Packaging and distribution
+        - Hardware control over USB
+        - Something else
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives you considered
+      description: Including anything you tried that did not work.
+
+  - type: markdown
+    attributes:
+      value: |
+        Some things are deliberately out of scope: recording, a soundboard,
+        multitrack output, and headphone monitoring. This project is the mixing
+        and processing stage only. See the README before proposing one of those.

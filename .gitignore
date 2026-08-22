@@ -1,0 +1,15 @@
+dist/
+build/
+*.app
+*.driver
+*.dmg
+*.pkg
+.release.env
+.build/
+.DS_Store
+*.xcuserdatad
+tools/probe/build/
+
+# Bench measurement rig: build output and captured audio
+tools/bench/build/
+tools/bench/samples/

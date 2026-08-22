@@ -1,0 +1,88 @@
+name: Bug report
+description: Something does not work — audio artefacts, a missing device, a crash, or wrong behaviour in the UI.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Do not report security vulnerabilities here. Use
+        [private reporting](https://github.com/trsdn/OpenConnct/security/advisories/new)
+        instead.
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What did you observe, and what did you expect instead?
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Plug in ...
+        2. Open OpenConnct and ...
+        3. Speak into ...
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Which part
+      options:
+        - Virtual device does not appear, or disappears
+        - Audio artefacts — clicks, crackling, dropouts
+        - An effect does not behave as expected
+        - Levels or metering
+        - Device hot-plug
+        - User interface
+        - Build, installation or signing
+        - Not sure
+    validations:
+      required: true
+
+  - type: input
+    id: macos
+    attributes:
+      label: macOS version and architecture
+      placeholder: "14.5, Apple silicon"
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: OpenConnct version
+      description: "`CFBundleShortVersionString` in the app's Info.plist, or the commit you built."
+    validations:
+      required: true
+
+  - type: textarea
+    id: hardware
+    attributes:
+      label: Microphones and interfaces
+      description: Every input device that was connected, not only the one you were using — OpenConnct binds all physical inputs.
+    validations:
+      required: true
+
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Diagnostics
+      description: >-
+        For anything audio-related, open the technical details panel in the app
+        and paste the dropout count and the per-microphone clock correction.
+        A few dropouts on connect are normal; the number growing afterwards is not.
+      render: text
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before submitting
+      options:
+        - label: I ran `make test` and `make test-driver`, or this is not a build I made myself.
+        - label: This is not a security vulnerability.
+          required: true

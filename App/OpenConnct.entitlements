@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Signing with a Developer ID requires the hardened runtime, and the
+	     hardened runtime blocks microphone access outright unless the app asks
+	     for it here. Without this key the app is not merely un-prompted, it is
+	     denied: NSMicrophoneUsageDescription alone is not enough, and the
+	     failure is silent, so the app simply captures nothing.
+
+	     This was found the hard way. Switching to a stable Developer ID to stop
+	     macOS re-asking for permission after every rebuild also, unintentionally,
+	     took the microphone away. -->
+	<key>com.apple.security.device.audio-input</key>
+	<true/>
+</dict>
+</plist>

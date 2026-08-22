@@ -1,0 +1,13 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Report a security vulnerability
+    url: https://github.com/trsdn/OpenConnct/security/advisories/new
+    about: >-
+      Report privately. Part of this project runs inside coreaudiod, so please
+      do not disclose it in a public issue first.
+  - name: Security policy and design constraints
+    url: https://github.com/trsdn/OpenConnct/blob/main/SECURITY.md
+    about: Read this before proposing changes to the HAL plug-in or adding an IPC mechanism.
+  - name: Installation and verification runbook
+    url: https://github.com/trsdn/OpenConnct/blob/main/docs/PHASE1-VERIFICATION.md
+    about: Step-by-step install, verification, and how to roll back if you lose audio.

@@ -1,0 +1,32 @@
+import Foundation
+
+/// Persists which input devices the user wants OpenConnct to use, keyed by
+/// CoreAudio device UID.
+///
+/// Absence of a stored selection is meaningfully different from an empty one.
+/// On first launch nothing has been chosen, so `AudioEngine.selected(from:)`
+/// applies its default — every input except the built-in microphone. Once the
+/// user has made a choice, including deselecting everything, we honour it
+/// exactly and the default never applies again.
+struct DeviceSelectionStore {
+    private let fileURL: URL
+
+    init(filename: String = "devices.json") {
+        self.fileURL = AppSupport.directory.appendingPathComponent(filename)
+    }
+
+    func load() -> Set<String>? {
+        guard let data = try? Data(contentsOf: fileURL),
+              let decoded = try? JSONDecoder().decode([String].self, from: data) else {
+            return nil
+        }
+        return Set(decoded)
+    }
+
+    func save(_ uids: Set<String>) {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        guard let data = try? encoder.encode(uids.sorted()) else { return }
+        try? data.write(to: fileURL, options: .atomic)
+    }
+}
