@@ -3,9 +3,10 @@
 This is the end-to-end test that cannot be automated. It needs physical microphones, an
 administrator password, and a CoreAudio restart.
 
-**Nothing in this document has been performed yet.** The driver compiles, signs, and passes 384
-offline assertions through the real `AudioServerPlugIn` vtable, but it has never been loaded by
-`coreaudiod` and no audio has ever passed through the complete pipeline.
+**This runbook has been completed on the reference machine.** The driver loads in `coreaudiod`,
+audio passes through the full pipeline with real hardware, and every step below was carried out —
+see [Status and roadmap](../README.md#status-and-roadmap) for the measurements. It is kept because
+it still has to be repeated on any new machine, and because Section 7 is the rollback procedure.
 
 > **If you are reading this because audio is broken right now, skip to
 > [Section 7: Rollback](#7-rollback-getting-your-audio-back).** It is written to be followed on

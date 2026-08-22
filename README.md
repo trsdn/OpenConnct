@@ -396,13 +396,33 @@ macOS requires explicit microphone permission for any app that captures audio. O
 
 ### What is verified
 
-- The HAL plug-in compiles clean and signs with a Developer ID certificate.
-- The DSP core passes its full test suite (`make test`).
-- The app builds as a universal binary (arm64 + x86_64) and launches on macOS 13+.
+Measured on real hardware — a RØDE NT-USB Mini and a RØDE VideoMic NTG on Apple silicon — not inferred from code review.
 
-### What is **not** yet verified
+**The plug-in loads and the device is real.** `OpenConnect Mic` is live in `coreaudiod` (2 ch, 48 kHz, Float32, Virtual transport) and selectable anywhere in the system. `OpenConnect Sink` stays hidden, so it cannot be picked as an output and fed back into itself.
 
-> **The plug-in has not yet been loaded by `coreaudiod` in testing, and no audio has passed through the complete pipeline with real hardware.** The ring-buffer loopback design, the drift controller, and the DSP chain are all correct by code review and unit test, but end-to-end audio has not been confirmed.
+**The loopback is bit-accurate.** `tools/probe` renders a known tone into the sink and captures the mic, which measures the driver inside the real `coreaudiod` with no app and no microphone involved:
+
+| Measurement | Result |
+|---|---|
+| Frames in 5 s | 240128 — exactly 48 kHz |
+| Peak | −12.04 dBFS sent, −12.04 dBFS received |
+| 440 Hz component | 100.0 % of amplitude sent |
+| Exact-zero samples | 0 of 240128 |
+
+**Audio passes end to end.** Microphone → app → DSP chain → virtual device, confirmed with `tools/probe --listen`, which measures what is already on the device rather than competing for the sink. Live room signal arrives with no dropouts after start-up.
+
+**Drift compensation holds.** A simulated two-hour soak at +200 ppm tracks the offset to 200.00 ppm measured against 200 ppm applied, with **zero underruns and zero overruns** and THD 0.00004. Note that drift only becomes measurable after roughly ten minutes — any shorter soak measures nothing.
+
+**Hot-plug survives a real cable pull.** A microphone was physically unplugged and replugged while running: no crash, no restart, the channel strip returned by itself with its settings intact, the dropout counter advanced by 2 on reconnect and then stopped, and the clock correction settled back to zero within about a minute.
+
+**CPU is well inside target.** Around 5 % for two live channels with all effects, meters running. The audio work itself is roughly 0.5 % — nearly all of the remainder is drawing the level meters, which is why they are AppKit rather than SwiftUI (a SwiftUI implementation cost 22 % of a core).
+
+**Test suites pass.** `make test` covers the DSP primitives offline against known signals; `make test-driver` exercises the plug-in's property dispatch and ring buffer.
+
+### Known limitations
+
+- **Every physical input is bound**, not just the RØDE mics. The filter can distinguish hardware from virtual and aggregate devices, but it cannot tell a microphone from a capture card, so devices like a Cam Link appear as channels too. Disable the ones you do not want.
+- **The stereo VideoMic NTG is summed to mono.** Measured before assuming: its two channels are identical (correlation 1.0000, 0.00 dB apart), so averaging them is correct rather than lossy.
 
 ### Known deferred work
 
