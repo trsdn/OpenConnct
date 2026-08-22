@@ -1,4 +1,4 @@
-.PHONY: all build driver sign-app clean run test test-driver test-all install-driver uninstall-driver
+.PHONY: all build driver sign-app clean run test test-driver test-all install-driver uninstall-driver icon
 
 APP_NAME       = OpenConnect
 DRIVER_NAME    = OpenConnect
@@ -14,6 +14,7 @@ DRIVER_PLIST   = App/OpenConnectDriver/Info.plist
 
 APP_SRC        = $(shell find App/OpenConnectApp -name '*.swift')
 APP_PLIST      = App/OpenConnectApp/Info.plist
+APP_ICON       = App/OpenConnectApp/Resources/AppIcon.icns
 
 DSP_INCLUDE    = Core/Sources/OpenConnectDSP/include
 DSP_SRC        = $(wildcard Core/Sources/OpenConnectDSP/*.cpp)
@@ -73,8 +74,13 @@ build: $(DSP_LIB)
 	@lipo -create $(foreach a,$(APP_ARCHS),$(DSP_OBJ_DIR)/$(APP_NAME)-$(a)) \
 		-output $(APP_BUNDLE)/Contents/MacOS/$(APP_NAME)
 	@cp $(APP_PLIST) $(APP_BUNDLE)/Contents/Info.plist
+	@cp $(APP_ICON) $(APP_BUNDLE)/Contents/Resources/AppIcon.icns
 	@echo "Built $(APP_BUNDLE) [$(APP_ARCHS)]"
 	@$(MAKE) --no-print-directory sign-app
+
+# Regenerate the app icon from scripts/make-icon.py (requires Pillow).
+icon:
+	@python3 scripts/make-icon.py
 
 # Sign the app with a real identity whenever one is available.
 #
