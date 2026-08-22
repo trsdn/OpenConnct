@@ -254,9 +254,15 @@ The badge follows the **signal path, not the device's capability**. Turning the 
 | Pad | Always in the app |
 | High-pass filter | Always in the app |
 
-Pad and high-pass are in the app because **no device-side control for them exists to use**. Both attached microphones were probed exhaustively — 20 CoreAudio selectors across the input, output and global scopes and elements 0–2. Everything they expose is volume (in decibels and scalar), mute, a play-through switch on element 1, and the volume range. `kAudioDevicePropertyHighPassFilterSetting` and `kAudioDevicePropertyChannelNominalLineLevel` — the standard properties for exactly these two functions — are absent, as are phantom power, phase invert, clip light and data source.
+Pad and high-pass are in the app because **no device-side control for them is reachable from the computer**. Both attached microphones were probed exhaustively — 20 CoreAudio selectors across the input, output and global scopes and elements 0–2. Everything they expose is volume (in decibels and scalar), mute, a play-through switch on element 1, and the volume range. `kAudioDevicePropertyHighPassFilterSetting` and `kAudioDevicePropertyChannelNominalLineLevel` — the standard properties for exactly these two functions — are absent, as are phantom power, phase invert, clip light and data source.
 
-Anything a device does expose is therefore reachable through public API; anything else would need a vendor protocol reverse-engineered per manufacturer, which is out of scope. See the discussion on issue #2.
+#### Stages the host cannot see
+
+That probe says nothing about what the microphone does on its own. **Plenty of microphones have a high-pass filter and a pad built in, switched by buttons on the body**, applied before the signal ever reaches the computer and reported through no property at all. The host has no way to read them, no way to set them, and no way to know they exist.
+
+This has a practical consequence, so the interface names it: a microphone whose own filter is set to cut at 75 Hz, feeding an OpenConnct channel also set to 75 Hz, gets **two** filters and a thin-sounding voice with nothing on screen to explain it. Whenever the pad or the high-pass is switched on, a line under the preamp controls points this out. It is deliberately hedged — "some microphones have…" — because most do not, and the app genuinely cannot tell which kind is plugged in. Overstating it would train the user to ignore it.
+
+The general rule: **`APP` means "this control is ours", never "your microphone cannot do this."**
 
 ### Clock drift correction
 

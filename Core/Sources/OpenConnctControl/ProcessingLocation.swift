@@ -49,11 +49,19 @@ public struct ChannelProcessingMap: Equatable, Sendable {
     ///   - hardwareGainRange: the device's own gain stage, if it has one.
     ///   - hardwareGainEnabled: whether the user allows this app to drive it.
     ///
-    /// Pad and high-pass are unconditionally software. That is not an oversight
-    /// and not a to-do: probing every device-level control CoreAudio publishes —
-    /// across all scopes and elements — found gain, mute and direct monitoring,
-    /// and nothing else. There is no public property for a pad or a high-pass,
-    /// so an honest interface says the app does them.
+    /// Pad and high-pass are unconditionally software, and the reason is narrower
+    /// than it first appears. Probing every device-level control CoreAudio
+    /// publishes — across all scopes and elements — found gain, mute and direct
+    /// monitoring, and nothing else. That establishes that no pad or high-pass is
+    /// *reachable from the computer*, which is the only thing that matters for
+    /// what this app can offer.
+    ///
+    /// It emphatically does **not** establish that microphones lack these
+    /// stages. Several have a high-pass and a pad built in, switched by buttons
+    /// on the body, entirely invisible to the host. `.software` here therefore
+    /// means "this control is ours", never "your microphone cannot do this" —
+    /// see `bodySwitchNote`, which exists precisely because the two can both be
+    /// on at once.
     public static func resolve(
         hardwareGainRange: HardwareGainRange?,
         hardwareGainEnabled: Bool
@@ -63,5 +71,35 @@ public struct ChannelProcessingMap: Equatable, Sendable {
             gain: gainRunsOnDevice ? .device : .software,
             pad: .software,
             highPass: .software)
+    }
+
+    /// A caution to show when the user has switched on a stage that their
+    /// microphone may *also* be applying on its own.
+    ///
+    /// This is the one place where the honest answer is "we cannot tell you".
+    /// A microphone with a filter button on its body applies that filter before
+    /// the signal reaches the computer, and reports nothing about it — there is
+    /// no property to read. So a microphone set to cut at 75 Hz, feeding this app
+    /// also set to cut at 75 Hz, produces a thin voice and no clue as to why.
+    ///
+    /// The note is shown only while the relevant stage is on. Permanently
+    /// visible, it would be wallpaper on the many microphones that have no such
+    /// switch; shown on demand, it appears exactly when the mistake is possible.
+    ///
+    /// Returns `nil` when neither stage is active.
+    public static func bodySwitchNote(padEnabled: Bool, highPassActive: Bool) -> String? {
+        switch (highPassActive, padEnabled) {
+        case (false, false):
+            return nil
+        case (true, false):
+            return "Some microphones have their own filter switch on the body. "
+                + "If yours is set, both apply."
+        case (false, true):
+            return "Some microphones have their own pad switch on the body. "
+                + "If yours is set, both apply."
+        case (true, true):
+            return "Some microphones have filter and pad switches on the body. "
+                + "If yours are set, both apply."
+        }
     }
 }

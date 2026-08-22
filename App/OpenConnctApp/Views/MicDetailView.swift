@@ -252,6 +252,35 @@ private struct HPFRow: View {
     private var isContinuous: Bool { settings.hpfMode == .continuous }
 }
 
+// MARK: - Body-switch note
+
+/// A caution that the microphone may be applying its own pad or filter on top of
+/// ours.
+///
+/// The height is reserved whether or not there is anything to say. Everything
+/// else in this card is laid out the same way, and a note that appeared and
+/// disappeared would shove the four effect buttons up and down each time the pad
+/// was switched — the exact jitter this pane was rebuilt to remove.
+private struct BodySwitchNote: View {
+    let settings: ChannelSettings
+
+    var body: some View {
+        Text(note ?? " ")
+            .font(Theme.captionFont)
+            .foregroundColor(Theme.textSecondary)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .frame(height: 14)
+            .opacity(note == nil ? 0 : 1)
+            .accessibilityHidden(note == nil)
+    }
+
+    private var note: String? {
+        ChannelProcessingMap.bodySwitchNote(
+            padEnabled: settings.padEnabled,
+            highPassActive: settings.hpfMode != .off)
+    }
+}
+
 // MARK: - MicDetailView
 
 /// One microphone's settings, presented as a sheet over the mixer.
@@ -287,6 +316,7 @@ struct MicDetailView: View {
                             PadRow(settings: settings, store: store)
                             Divider().background(Theme.border)
                             HPFRow(settings: settings, store: store)
+                            BodySwitchNote(settings: settings)
                         }
                     }
 

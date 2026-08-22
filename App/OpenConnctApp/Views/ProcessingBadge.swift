@@ -73,7 +73,9 @@ struct ProcessingBadge: View {
         location.isDevice
             ? "The microphone does this itself, before its own converter. "
                 + "That is slightly quieter than doing it here."
-            : "OpenConnct does this, after the signal has been digitised."
+            : "OpenConnct does this, after the signal has been digitised. "
+                + "Your microphone may have a switch of its own for it too, which "
+                + "the computer cannot see."
     }
 
     private var accessibilityText: String {
