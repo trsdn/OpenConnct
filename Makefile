@@ -12,7 +12,11 @@ ARCHS          = -arch arm64 -arch x86_64
 DRIVER_SRC     = App/OpenConnctDriver/OpenConnctDriver.c
 DRIVER_PLIST   = App/OpenConnctDriver/Info.plist
 
-APP_SRC        = $(shell find App/OpenConnctApp -name '*.swift')
+# The app is one module built by plain swiftc, so control-side sources that live
+# under Core/ (where SwiftPM can unit-test them) are compiled in directly rather
+# than imported. SwiftPM cannot reference sources outside its package root, which
+# is why they live there and not under App/.
+APP_SRC        = $(shell find App/OpenConnctApp Core/Sources/OpenConnctControl -name '*.swift')
 APP_PLIST      = App/OpenConnctApp/Info.plist
 APP_ICON       = App/OpenConnctApp/Resources/AppIcon.icns
 APP_INSTALLER  = App/OpenConnctApp/Resources/install-driver.sh

@@ -226,6 +226,22 @@ flowchart LR
     Mix --> Out --> Sink --> HalRing --> Mic --> Zoom
 ```
 
+### Gain
+
+Gain is a single number per channel, and it is the **total** amount applied between the microphone capsule and the mix — not a DSP trim.
+
+Where the microphone has a gain stage of its own, the app uses it for as much of that total as it can and applies the remainder in DSP. Gain inside the microphone happens ahead of its own converter, so it lifts the signal above the converter's noise instead of amplifying that noise along with it. Measured on real hardware the benefit is real but modest: about **2.5 dB** of noise floor at a typical setting, and swamped by room noise at extreme ones. It is taken because it is free, not because it is transformative.
+
+This uses `kAudioDevicePropertyVolumeDecibels` on the input scope — the USB Audio Class feature unit, which CoreAudio publishes as an ordinary device property. It is public, documented, and works on any class-compliant microphone. No vendor-specific protocol is involved and no undocumented data is written to any device.
+
+Three details are not obvious and are deliberate:
+
+- **The DSP half is derived from what the device *reports*, never from what it was asked for.** Writing this property was measured taking a median of 46 ms on one device and **up to 1007 ms** on another. Between the request and its effect there is a long, variable window in which the two disagree. Compensating against the reported value means the total is correct at every instant — while the device is still moving, the DSP holds the difference. It also means that if another application, or a control on the device itself, changes the gain, the same arithmetic absorbs it and nothing is audible.
+- **All device access is off the main thread**, on a dedicated serial queue with coalescing. A one-second write on the main thread is a visible hang, and a slider drag produces changes far faster than the device can consume them, so only the newest target is kept.
+- **The number's meaning changed, so it is migrated once.** It used to be a DSP trim on top of whatever the microphone's preamp happened to be set to. The first time a device is seen, its current gain is folded into the number, so the upgrade changes nothing audible. Without this the upgrade would have been a silent, large drop — this range *is* the preamp, and at its minimum a microphone is very nearly deaf.
+
+Turning **Using the microphone's own gain** off freezes the device wherever it stands and leaves the whole total to the DSP compensation. It deliberately does *not* turn the device down: "off" means "do not touch my hardware", not "turn my hardware down". Switching it is inaudible — verified by interleaved measurement, where on and off differed by less than the room varied between takes.
+
 ### Clock drift correction
 
 Each USB microphone runs on its own crystal oscillator, which is not synchronised to the output device. Over time the mic clock drifts relative to the output clock: a mic running 50 ppm fast will overfill the ring at about 2.4 frames per minute.
@@ -282,7 +298,7 @@ OpenConnct/
 │       ├── Resources/
 │       │   └── install-driver.sh           Run as root by /bin/bash, sealed in the signed bundle
 │       ├── Views/                          SwiftUI channel strip and mixer views
-│       └── Hardware/                       USB HID stubs (reserved for v2)
+│       └── Hardware/                       Device gain control via CoreAudio
 ├── Core/
 │   └── Sources/OpenConnctDSP/     C++17 DSP core behind a pure C ABI
 │       ├── include/OpenConnctDSP/ Public headers (consumed by app via bridging header)
@@ -497,7 +513,7 @@ Measured on real hardware — two USB condenser microphones on Apple silicon —
 
 ### Known deferred work
 
-- **Hardware gain, pad and high-pass control over vendor-specific USB HID protocols** is out of scope for v1. The `App/OpenConnctApp/Hardware/` directory is a stub behind a protocol abstraction. In v1 gain, pad and HPF are all implemented in DSP; driving them on the device instead would recover the headroom lost ahead of the converter.
+- **Pad and high-pass on the microphone itself** are out of scope. Unlike gain (see *Gain* above, which now uses the microphone's own stage where one exists), these are not exposed through any public API. Reaching them would mean writing undocumented vendor-specific USB HID reports — a per-vendor reverse-engineering effort with a real risk of putting a device into an unknown state, for a feature the DSP already provides. In v1 and for the foreseeable future, pad and HPF are done in DSP.
 - **More than 8 simultaneous channels.** The current limit is `kMaxChannels = 8`, which is adequate for the reference hardware. Increasing it is a reallocation-only change.
 - **Per-source stereo panning and multi-bus routing.** "OpenConnct Mic" is a **stereo** device (2 channels, 48 kHz, Float32) because that is what conferencing and streaming apps expect. Both mics are mono sources, so the mix is summed and written identically to the left and right channels — a centre image on a stereo device. Panning individual mics, or exposing each mic as its own output bus, is not planned.
 

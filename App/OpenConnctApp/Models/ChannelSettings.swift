@@ -77,6 +77,22 @@ struct ChannelSettings: Codable, Equatable, Identifiable {
     var deviceName: String
 
     var gainDB: Float = 0
+    /// Whether the microphone's own gain stage may take part of `gainDB`.
+    ///
+    /// On by default because it is measurably (if modestly) quieter, and off is
+    /// available because writing to a device is a side effect outside this app:
+    /// it persists in the device, and other software sees it. Anyone who wants
+    /// this app to leave their hardware alone must be able to say so.
+    var hardwareGainEnabled: Bool = true
+    /// Whether `gainDB` has been converted to an absolute total.
+    ///
+    /// Before hardware gain existed, `gainDB` was a DSP trim sitting on top of
+    /// whatever the microphone's own preamp happened to be set to. It is now the
+    /// whole amount, split between the two. Reinterpreting an old value under
+    /// the new meaning would drop a typical channel by around 26 dB the first
+    /// time it launched — so the first time a device is seen, its current gain
+    /// is folded into the number and this is set, and nothing changes audibly.
+    var hardwareGainAdopted: Bool = false
     var padEnabled: Bool = false
     var padDB: Float = -20
 
@@ -122,7 +138,7 @@ struct ChannelSettings: Codable, Equatable, Identifiable {
 
     private enum CodingKeys: String, CodingKey {
         case deviceUID, deviceName
-        case gainDB, padEnabled, padDB
+        case gainDB, hardwareGainEnabled, hardwareGainAdopted, padEnabled, padDB
         case hpfMode, hpfFrequency
         case gateEnabled, compressorEnabled, exciterEnabled, bassEnhancerEnabled
         case gate, compressor, exciter, bassEnhancer
@@ -137,6 +153,10 @@ struct ChannelSettings: Codable, Equatable, Identifiable {
         deviceName = try c.decodeIfPresent(String.self, forKey: .deviceName) ?? deviceUID
 
         gainDB = try c.decodeIfPresent(Float.self, forKey: .gainDB) ?? 0
+        hardwareGainEnabled =
+            try c.decodeIfPresent(Bool.self, forKey: .hardwareGainEnabled) ?? true
+        hardwareGainAdopted =
+            try c.decodeIfPresent(Bool.self, forKey: .hardwareGainAdopted) ?? false
         padEnabled = try c.decodeIfPresent(Bool.self, forKey: .padEnabled) ?? false
         padDB = try c.decodeIfPresent(Float.self, forKey: .padDB) ?? -20
 
@@ -171,6 +191,8 @@ struct ChannelSettings: Codable, Equatable, Identifiable {
         try c.encode(deviceUID, forKey: .deviceUID)
         try c.encode(deviceName, forKey: .deviceName)
         try c.encode(gainDB, forKey: .gainDB)
+        try c.encode(hardwareGainEnabled, forKey: .hardwareGainEnabled)
+        try c.encode(hardwareGainAdopted, forKey: .hardwareGainAdopted)
         try c.encode(padEnabled, forKey: .padEnabled)
         try c.encode(padDB, forKey: .padDB)
         try c.encode(hpfMode, forKey: .hpfMode)

@@ -27,6 +27,18 @@ final class ParameterStore: ObservableObject {
     /// Set when the user has not granted microphone access yet.
     @Published var microphonePermissionDenied = false
 
+    /// Which devices have a gain stage of their own, and what it can do. Read by
+    /// the UI to show that gain is coming from the microphone rather than the
+    /// DSP; empty for every device that has none, which is most of them.
+    @Published private(set) var hardwareGainRanges: [String: HardwareGainRange] = [:]
+
+    /// What each device most recently *reported*, which is not the same as what
+    /// it was last asked for — see `applyGain` for why that distinction is the
+    /// whole point.
+    private var reportedHardwareGain: [String: Float] = [:]
+
+    private let hardwareGain = CoreAudioInputGain()
+
     private let store = SettingsStore()
     private var saved: [String: ChannelSettings]
     private weak var engine: AudioEngine?
@@ -39,6 +51,9 @@ final class ParameterStore: ObservableObject {
 
     init() {
         saved = store.load()
+        hardwareGain.onReportedGainChanged = { [weak self] uid, db in
+            Task { @MainActor in self?.hardwareGainDidChange(uid: uid, db: db) }
+        }
     }
 
     func attach(engine: AudioEngine) {
@@ -120,10 +135,123 @@ final class ParameterStore: ObservableObject {
         }
         channels = next
         meterHub.ensure(uids: next.map(\.deviceUID))
+        reconcileHardwareGain(devices: devices)
         for (index, settings) in channels.enumerated() {
             pushAll(channel: index, settings: settings)
         }
         persist()
+    }
+
+    // MARK: - Hardware gain
+
+    /// Finds out which of the attached devices can set their own input gain, and
+    /// drops any that have gone away.
+    ///
+    /// Gain applied inside the microphone happens before its converter, so it
+    /// lifts the signal above the converter's own noise rather than amplifying
+    /// that noise along with it. Measured on real hardware the benefit is real
+    /// but modest — around 2.5 dB of noise floor at a typical setting, and
+    /// swamped by room noise at extreme ones. Worth taking because it is free;
+    /// not worth claiming as transformative.
+    private func reconcileHardwareGain(devices: [AudioInputDevice]) {
+        let present = Set(devices.map(\.uid))
+        for uid in hardwareGainRanges.keys where !present.contains(uid) {
+            hardwareGain.forget(deviceUID: uid)
+            hardwareGainRanges.removeValue(forKey: uid)
+            reportedHardwareGain.removeValue(forKey: uid)
+        }
+
+        for device in devices where hardwareGainRanges[device.uid] == nil {
+            guard let range = hardwareGain.discover(
+                deviceUID: device.uid, deviceID: device.objectID)
+            else { continue }
+            hardwareGainRanges[device.uid] = range
+            // Seed from the device rather than assuming it starts where we left
+            // it. Another application may have moved it while we were not
+            // running, and the compensation must be right from the first block.
+            hardwareGain.refresh(deviceUID: device.uid)
+        }
+    }
+
+    /// Whether this channel is allowed to *move* the device's gain stage.
+    ///
+    /// Note what this does not gate: the compensation below always accounts for
+    /// whatever the device reports, switch or no switch. The device's gain is
+    /// part of the signal path whether this app put it there or not, so ignoring
+    /// it would make the user's number mean two different things depending on a
+    /// preference. Switching off freezes the device where it stands and leaves
+    /// the DSP holding the difference — inaudible, which is what a preference
+    /// about side effects should be.
+    private func mayWriteHardwareGain(_ settings: ChannelSettings) -> Bool {
+        settings.hardwareGainEnabled && hardwareGainRanges[settings.deviceUID] != nil
+    }
+
+    /// The gain the DSP must apply for this channel.
+    ///
+    /// Derived from what the device *reports*, never from what it was asked for.
+    /// Writing the property was measured taking up to a second, so between the
+    /// request and its effect there is a long window in which the two disagree;
+    /// compensating against the reported value means the total the user set is
+    /// correct at every instant during that window, instead of dipping or
+    /// spiking until the device catches up.
+    private func softwareGainDB(for settings: ChannelSettings) -> Float {
+        guard hardwareGainRanges[settings.deviceUID] != nil else { return settings.gainDB }
+        return HardwareGainSplitter.compensate(
+            totalDB: settings.gainDB,
+            hardwareDB: reportedHardwareGain[settings.deviceUID]
+        ).softwareDB
+    }
+
+    /// Sends the DSP half of the gain and, when allowed, asks the device for its
+    /// half. Never blocks: the request is queued and coalesced, and the result
+    /// arrives through `hardwareGainDidChange`.
+    private func applyGain(channel: Int, settings: ChannelSettings) {
+        send(.gainDB, channel: channel, softwareGainDB(for: settings))
+        guard mayWriteHardwareGain(settings),
+              let range = hardwareGainRanges[settings.deviceUID]
+        else {
+            // Deliberately no write at all. An earlier version drove the device
+            // to the bottom of its range here, on the theory that "off" should
+            // mean "contributing nothing". Measured on real hardware that made
+            // the microphone almost deaf — this range is the microphone's
+            // preamp, and at its minimum a room sits near −100 dBFS. "Off" has
+            // to mean "don't touch it", not "turn it down".
+            return
+        }
+        hardwareGain.request(
+            gainDB: range.quantised(settings.gainDB), forDeviceUID: settings.deviceUID)
+    }
+
+    /// The device's gain moved. Re-derive the DSP half so the total stays put.
+    ///
+    /// This is also what makes an external change inaudible: if another
+    /// application or a control on the device moves the gain, the same
+    /// arithmetic absorbs it and the user hears nothing.
+    private func hardwareGainDidChange(uid: String, db: Float?) {
+        guard let index = channels.firstIndex(where: { $0.deviceUID == uid }) else {
+            reportedHardwareGain[uid] = db
+            return
+        }
+
+        // First sight of this device: fold its current gain into the user's
+        // number so the meaning of an already-saved value does not change and
+        // nothing sounds different after the update. Done here rather than at
+        // discovery because the device's value only arrives asynchronously.
+        if let db, !channels[index].hardwareGainAdopted {
+            reportedHardwareGain[uid] = db
+            var adopted = channels[index]
+            adopted.gainDB = HardwareGainSplitter.adoptedTotal(
+                previousTotalDB: adopted.gainDB, reportedHardwareDB: db)
+            adopted.hardwareGainAdopted = true
+            channels[index] = adopted
+            applyGain(channel: index, settings: adopted)
+            persist()
+            return
+        }
+
+        guard reportedHardwareGain[uid] != db else { return }
+        reportedHardwareGain[uid] = db
+        send(.gainDB, channel: index, softwareGainDB(for: channels[index]))
     }
 
     // MARK: - Mutation
@@ -169,7 +297,7 @@ final class ParameterStore: ObservableObject {
     }
 
     private func pushAll(channel: Int, settings s: ChannelSettings) {
-        send(.gainDB, channel: channel, s.gainDB)
+        applyGain(channel: channel, settings: s)
         send(.padDB, channel: channel, s.padDB)
         send(.padEnabled, channel: channel, s.padEnabled ? 1 : 0)
         send(.hpfMode, channel: channel, Float(s.hpfMode.rawValue))
@@ -206,7 +334,9 @@ final class ParameterStore: ObservableObject {
     }
 
     private func pushChanged(channel c: Int, from a: ChannelSettings, to b: ChannelSettings) {
-        if a.gainDB != b.gainDB { send(.gainDB, channel: c, b.gainDB) }
+        if a.gainDB != b.gainDB || a.hardwareGainEnabled != b.hardwareGainEnabled {
+            applyGain(channel: c, settings: b)
+        }
         if a.padDB != b.padDB { send(.padDB, channel: c, b.padDB) }
         if a.padEnabled != b.padEnabled { send(.padEnabled, channel: c, b.padEnabled ? 1 : 0) }
         if a.hpfMode != b.hpfMode { send(.hpfMode, channel: c, Float(b.hpfMode.rawValue)) }

@@ -51,6 +51,21 @@ fall back to synthesised `Codable`. The whole settings file is decoded in one
 microphone's settings, not just one. Add a coding key and a default for each new
 field.
 
+**Talking to a microphone is slow, and never happens on a UI or audio thread.**
+Setting a device's own gain was measured at a median of 46 ms on one device and
+up to **1007 ms** on another. `CoreAudioInputGain` therefore runs every read and
+write on a dedicated serial queue and coalesces requests, keeping only the newest
+target. Its threading is stated in a comment at the top of the file: the
+capability tables belong to the main thread, the pending queue belongs to the
+serial queue, and nothing is shared — the slow path captures the `AudioObjectID`
+it needs by value rather than looking it up. Preserve that split.
+
+**Gain compensation reads the device, never the request.** Because of that
+latency, deriving the DSP half from what the device was *asked* for would leave
+the level wrong for up to a second at a time. `HardwareGainSplitter.compensate`
+takes the reported value for that reason, and it is also what makes an external
+change to the gain inaudible. Do not "simplify" it to use the requested value.
+
 **The level meters are AppKit on purpose.** A SwiftUI implementation measured
 22 % of a CPU core; the AppKit one measures under 6 % and, unlike the SwiftUI
 version, does not scale with window size. Read the header comment in

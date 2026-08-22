@@ -34,7 +34,15 @@ private struct GainBlock: View {
     @ObservedObject var store: ParameterStore
 
     private let stepDB: Float = 1.0
-    private let gainRange: ClosedRange<Float> = -20...40
+
+    /// The usable total. With a microphone that has its own preamp the number
+    /// now covers that preamp as well as the DSP trim, so the ceiling has to
+    /// leave room above what the device alone can reach — otherwise adopting a
+    /// device already near its maximum would land outside the slider.
+    private var gainRange: ClosedRange<Float> {
+        guard let hw = store.hardwareGainRanges[settings.deviceUID] else { return -20...40 }
+        return -20...max(40, hw.maxDB + 10)
+    }
 
     var body: some View {
         VStack(spacing: 8) {
@@ -88,6 +96,36 @@ private struct GainBlock: View {
             .frame(maxWidth: 320)
             .accessibilityLabel(Text("Gain"))
             .accessibilityValue(Text(formatDB(settings.gainDB, decimals: 1)))
+
+            hardwareGainNote
+        }
+    }
+
+    /// Shown only for microphones that have a gain stage of their own.
+    ///
+    /// Deliberately a footnote rather than a second control. The user sets one
+    /// number and the app decides how much of it the microphone contributes; a
+    /// second slider would make an implementation detail the user's problem. The
+    /// switch is here because writing gain into a device is a side effect that
+    /// outlives the app and is visible to other software, so refusing it has to
+    /// be possible — but it is a preference, not part of the daily control.
+    @ViewBuilder
+    private var hardwareGainNote: some View {
+        if let range = store.hardwareGainRanges[settings.deviceUID] {
+            Toggle(isOn: bind(settings.hardwareGainEnabled, uid: settings.deviceUID,
+                              store: store, keyPath: \.hardwareGainEnabled)) {
+                Text(settings.hardwareGainEnabled
+                     ? "Using the microphone's own gain"
+                     : "Gain applied in software only")
+                    .font(Theme.captionFont)
+                    .foregroundColor(Theme.textSecondary)
+            }
+            .toggleStyle(.checkbox)
+            .help("This microphone can amplify before its own converter, which is "
+                  + "slightly quieter than amplifying afterwards. It offers "
+                  + formatDB(range.minDB, decimals: 0) + " to "
+                  + formatDB(range.maxDB, decimals: 0)
+                  + ". Turn this off to leave the device's setting alone.")
         }
     }
 }
