@@ -44,11 +44,20 @@ private struct GainBlock: View {
         return -20...max(40, hw.maxDB + 10)
     }
 
+    private var processing: ChannelProcessingMap {
+        ChannelProcessingMap.resolve(
+            hardwareGainRange: store.hardwareGainRanges[settings.deviceUID],
+            hardwareGainEnabled: settings.hardwareGainEnabled)
+    }
+
     var body: some View {
         VStack(spacing: 8) {
-            Text("Gain")
-                .font(Theme.labelFont)
-                .foregroundColor(Theme.textSecondary)
+            HStack(spacing: 6) {
+                Text("Gain")
+                    .font(Theme.labelFont)
+                    .foregroundColor(Theme.textSecondary)
+                ProcessingBadge(location: processing.gain)
+            }
 
             HStack(spacing: 10) {
                 Spacer(minLength: 0)
@@ -112,20 +121,23 @@ private struct GainBlock: View {
     @ViewBuilder
     private var hardwareGainNote: some View {
         if let range = store.hardwareGainRanges[settings.deviceUID] {
-            Toggle(isOn: bind(settings.hardwareGainEnabled, uid: settings.deviceUID,
-                              store: store, keyPath: \.hardwareGainEnabled)) {
-                Text(settings.hardwareGainEnabled
-                     ? "Using the microphone's own gain"
-                     : "Gain applied in software only")
+            let binding = bind(settings.hardwareGainEnabled, uid: settings.deviceUID,
+                               store: store, keyPath: \.hardwareGainEnabled)
+            let explanation =
+                "This microphone can amplify before its own converter, which is "
+                + "slightly quieter than amplifying afterwards. It offers "
+                + formatDB(range.minDB, decimals: 0) + " to "
+                + formatDB(range.maxDB, decimals: 0)
+                + ". Turn this off to leave the device's own setting alone; "
+                + "the level you set stays the same either way."
+
+            Toggle(isOn: binding) {
+                Text("Use the microphone's own gain")
                     .font(Theme.captionFont)
                     .foregroundColor(Theme.textSecondary)
             }
             .toggleStyle(.checkbox)
-            .help("This microphone can amplify before its own converter, which is "
-                  + "slightly quieter than amplifying afterwards. It offers "
-                  + formatDB(range.minDB, decimals: 0) + " to "
-                  + formatDB(range.maxDB, decimals: 0)
-                  + ". Turn this off to leave the device's setting alone.")
+            .help(explanation)
         }
     }
 }
@@ -138,10 +150,7 @@ private struct PadRow: View {
 
     var body: some View {
         HStack(spacing: 8) {
-            Text("Pad")
-                .font(Theme.labelFont)
-                .foregroundColor(Theme.textSecondary)
-                .frame(width: 36, alignment: .leading)
+            RowLabel(text: "Pad", location: .software)
 
             Toggle(isOn: bind(settings.padEnabled, uid: settings.deviceUID, store: store,
                               keyPath: \.padEnabled)) {
@@ -185,10 +194,7 @@ private struct HPFRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 8) {
-                Text("HPF")
-                    .font(Theme.labelFont)
-                    .foregroundColor(Theme.textSecondary)
-                    .frame(width: 36, alignment: .leading)
+                RowLabel(text: "HPF", location: .software)
 
                 HStack(spacing: 4) {
                     ForEach(HPFMode.allCases) { mode in

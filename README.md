@@ -242,6 +242,22 @@ Three details are not obvious and are deliberate:
 
 Turning **Using the microphone's own gain** off freezes the device wherever it stands and leaves the whole total to the DSP compensation. It deliberately does *not* turn the device down: "off" means "do not touch my hardware", not "turn my hardware down". Switching it is inaudible — verified by interleaved measurement, where on and off differed by less than the room varied between takes.
 
+### Where each control runs
+
+The microphone detail pane marks the three preamp controls with a small badge — **MIC** when the stage runs inside the microphone, **APP** when OpenConnct does it after the signal has been digitised. Those three are the only ones badged, because they are the only ones a user could plausibly wonder about; nobody expects a USB microphone to contain a compressor.
+
+The badge follows the **signal path, not the device's capability**. Turning the microphone's own gain off flips its badge to APP, because that is then where the amplification actually happens. A badge that reported capability would be telling the truth about the hardware and a lie about the sound.
+
+| Control | Runs where |
+| --- | --- |
+| Gain | On the microphone when it has a settable gain stage and the switch is on, otherwise in the app |
+| Pad | Always in the app |
+| High-pass filter | Always in the app |
+
+Pad and high-pass are in the app because **no device-side control for them exists to use**. Both attached microphones were probed exhaustively — 20 CoreAudio selectors across the input, output and global scopes and elements 0–2. Everything they expose is volume (in decibels and scalar), mute, a play-through switch on element 1, and the volume range. `kAudioDevicePropertyHighPassFilterSetting` and `kAudioDevicePropertyChannelNominalLineLevel` — the standard properties for exactly these two functions — are absent, as are phantom power, phase invert, clip light and data source.
+
+Anything a device does expose is therefore reachable through public API; anything else would need a vendor protocol reverse-engineered per manufacturer, which is out of scope. See the discussion on issue #2.
+
 ### Clock drift correction
 
 Each USB microphone runs on its own crystal oscillator, which is not synchronised to the output device. Over time the mic clock drifts relative to the output clock: a mic running 50 ppm fast will overfill the ring at about 2.4 frames per minute.
