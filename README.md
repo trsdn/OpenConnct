@@ -81,6 +81,9 @@ Worth knowing, because it asks for administrator rights:
 - It runs one fixed script that ships **inside** the signed app bundle
   (`Contents/Resources/install-driver.sh`). The script takes no arguments and
   derives every path from its own location, so there is nothing to pass into it.
+  The copy in the bundle is not marked executable; the app hands it to
+  `/bin/bash` by name, so the interpreter is not read from a file on disk
+  either.
 - Before asking for your password, the app validates its **own** code signature,
   sealed resources included. A modified copy refuses to run the installer at all.
 - Running as root, the script then re-checks the driver's signature and confirms
@@ -274,7 +277,7 @@ OpenConnct/
 │       │   ├── AppSupport.swift            Application Support location + rename migration
 │       │   └── SettingsStore.swift         JSON persistence keyed by device UID
 │       ├── Resources/
-│       │   └── install-driver.sh           Runs as root, sealed inside the signed bundle
+│       │   └── install-driver.sh           Run as root by /bin/bash, sealed in the signed bundle
 │       ├── Views/                          SwiftUI channel strip and mixer views
 │       └── Hardware/                       USB HID stubs (reserved for v2)
 ├── Core/

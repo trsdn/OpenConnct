@@ -19,7 +19,7 @@ part of it does not run in the app at all.
 | Component | Runs in | Privilege |
 |---|---|---|
 | `OpenConnct.driver` (HAL plug-in) | **`coreaudiod`**, a system daemon | Loaded from a root-owned directory; a crash here takes down *all* audio on the machine |
-| `Contents/Resources/install-driver.sh` | A one-shot `osascript` prompt | **Root**, for the duration of one copy |
+| `Contents/Resources/install-driver.sh` | A one-shot `osascript` prompt, run by `/bin/bash` | **Root**, for the duration of one copy |
 | `OpenConnct.app` | The logged-in user | Hardened runtime, microphone entitlement only |
 
 The following are in scope and taken seriously:
@@ -89,6 +89,13 @@ the most sensitive thing it does, so the reasoning is set out here in full.
   through the environment and read back with `system attribute`, so there is no
   string to escape and nothing to inject into. The value is shell-quoted,
   because it still lands in a shell.
+- **The script is not marked executable, and the interpreter is named.** The copy
+  inside the bundle is mode `644`, and the app runs it as `/bin/bash <path>`.
+  A shell script in a bundle is a sealed resource, not signed code, so an
+  executable bit on it buys nothing and costs something: every downstream check
+  — notarisation preflight included — has to account for an executable file that
+  is not a declared Mach-O. Naming the interpreter also means it is not read from
+  a shebang line in a file on disk.
 - **The app validates its own signature, sealed resources included, before
   prompting.** This is load-bearing rather than decorative: macOS checks the main
   executable at launch, but altering a *resource* does not stop an already-trusted

@@ -216,8 +216,17 @@ final class DriverInstaller: ObservableObject {
         // escape and nothing to inject into.
         //
         // It still lands in a shell, so it is shell-quoted on the way in.
+        //
+        // `/bin/bash` is named here rather than left to the script's shebang.
+        // The copy in Resources is deliberately not executable — an executable
+        // file inside a signed bundle is something every downstream check has to
+        // account for, and a shell script is a sealed resource, not signed code
+        // — so it has to be handed to an interpreter either way. Naming the
+        // interpreter is the better version of that: it is one less thing read
+        // from a file on disk, and the script's own `$0` still resolves to its
+        // real path, which is what it derives every other path from.
         var environment = ProcessInfo.processInfo.environment
-        environment["OC_INSTALL_COMMAND"] = shellQuoted(script)
+        environment["OC_INSTALL_COMMAND"] = "/bin/bash " + shellQuoted(script)
         process.environment = environment
 
         process.arguments = [

@@ -79,8 +79,14 @@ build: $(DSP_LIB)
 	@# Copied before signing on purpose: the bundle seal covers Resources, so a
 	@# tampered installer script breaks the signature, and the script checks
 	@# that signature chain as root before it installs anything.
+	@#
+	@# Deliberately not executable. Inside an app bundle every executable file is
+	@# something a reviewer — or a notarisation preflight — has to account for,
+	@# and a shell script is not code that gets signed, it is a sealed resource.
+	@# The app hands it to /bin/bash explicitly instead, which also pins the
+	@# interpreter rather than trusting a shebang line in a file on disk.
 	@cp $(APP_INSTALLER) $(APP_BUNDLE)/Contents/Resources/install-driver.sh
-	@chmod 755 $(APP_BUNDLE)/Contents/Resources/install-driver.sh
+	@chmod 644 $(APP_BUNDLE)/Contents/Resources/install-driver.sh
 	@echo "Built $(APP_BUNDLE) [$(APP_ARCHS)]"
 	@$(MAKE) --no-print-directory sign-app
 
