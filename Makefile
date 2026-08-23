@@ -1,4 +1,4 @@
-.PHONY: all build driver sign-app clean run test test-driver test-all install-driver uninstall-driver icon
+.PHONY: all build driver sign-app clean run test test-driver test-all install-driver uninstall-driver icon deviceprobe
 
 APP_NAME       = OpenConnct
 DRIVER_NAME    = OpenConnct
@@ -138,10 +138,16 @@ test-driver:
 
 test-all: test test-driver
 
+# Builds the control-channel probe. Not part of `all`: it is an instrument for
+# investigating undocumented device protocols, not something the app needs.
+deviceprobe:
+	bash ./tools/deviceprobe/build_deviceprobe.sh
+
 clean:
 	rm -rf $(DIST_DIR)
 	rm -rf Core/.build
 	rm -rf tools/driver_harness/build
+	rm -rf tools/deviceprobe/build
 
 run: build
 	@open $(APP_BUNDLE)

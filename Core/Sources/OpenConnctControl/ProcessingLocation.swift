@@ -53,15 +53,18 @@ public struct ChannelProcessingMap: Equatable, Sendable {
     /// than it first appears. Probing every device-level control CoreAudio
     /// publishes — across all scopes and elements — found gain, mute and direct
     /// monitoring, and nothing else. That establishes that no pad or high-pass is
-    /// *reachable from the computer*, which is the only thing that matters for
-    /// what this app can offer.
+    /// reachable *by that route*, which is what governs what this app can offer
+    /// today.
     ///
-    /// It emphatically does **not** establish that microphones lack these
-    /// stages. Several have a high-pass and a pad built in, switched by buttons
-    /// on the body, entirely invisible to the host. `.software` here therefore
-    /// means "this control is ours", never "your microphone cannot do this" —
-    /// see `bodySwitchNote`, which exists precisely because the two can both be
-    /// on at once.
+    /// There is a second route. Both microphones this was developed against also
+    /// expose a vendor control channel, and its transport is now fully mapped —
+    /// see `docs/device-control.md`. What is not yet known is what its properties
+    /// mean, so nothing writes to it. When a control gains a device-backed
+    /// implementation, it changes here and the interface follows.
+    ///
+    /// `.software` therefore means "this control is ours", never "your
+    /// microphone cannot do this" — see `bodySwitchNote`, which exists precisely
+    /// because the two can both be on at once.
     public static func resolve(
         hardwareGainRange: HardwareGainRange?,
         hardwareGainEnabled: Bool

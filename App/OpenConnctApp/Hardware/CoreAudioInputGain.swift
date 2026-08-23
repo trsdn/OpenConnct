@@ -11,7 +11,7 @@ import Foundation
 /// device property. That route is public, documented, needs no reverse
 /// engineering, cannot brick a device by writing an unknown report — and works
 /// on any class-compliant microphone rather than one vendor's. It is strictly
-/// better, so it is what this uses. `docs/hardware-gain.md` records what was
+/// better, so it is what this uses. `docs/device-control.md` records what was
 /// measured, including what is *not* reachable this way.
 ///
 /// Everything slow here runs off the main thread and far away from the audio
