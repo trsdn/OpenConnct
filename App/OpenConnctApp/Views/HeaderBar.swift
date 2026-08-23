@@ -176,9 +176,9 @@ struct MasterMeterBar: View {
                 // reflows the row would make the bar beside it twitch.
                 .frame(width: 52, alignment: .leading)
         }
-        .help("The level OpenConnct sends to Teams, Zoom or OBS. The green "
-              + "band is the target: the loudest parts of your speech should "
-              + "land there.")
+        .help("The level OpenConnct sends to Teams, Zoom or OBS. The lighter "
+              + "section of the track is the target: the loudest parts of your "
+              + "speech should land there.")
     }
 }
 

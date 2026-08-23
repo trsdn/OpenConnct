@@ -78,6 +78,13 @@ final class MeterNSView: NSView {
     private var lastFillPx: CGFloat = -1
     private var lastPeakPx: CGFloat = -1
 
+    /// Ticks since the last full repaint. See `refresh(force:)`.
+    private var ticksSinceFullRepaint = 0
+    /// Meters tick at 20 Hz by default, so this is roughly one full repaint per
+    /// second. It is a bound on how long a stale pixel can survive, not a
+    /// frequency anything depends on.
+    private static let repaintInterval = 20
+
     override var isFlipped: Bool { false }
 
     override init(frame: NSRect) {
@@ -148,7 +155,10 @@ final class MeterNSView: NSView {
             peak = (meterPosition(held) * length).rounded()
         }
 
-        guard force || fill != lastFillPx || peak != lastPeakPx else { return }
+        let unchanged = !force && fill == lastFillPx && peak == lastPeakPx
+        ticksSinceFullRepaint += 1
+        let repairDue = ticksSinceFullRepaint >= Self.repaintInterval
+        guard !unchanged || repairDue else { return }
 
         // Repaint only the span that actually moved. `needsDisplay = true` costs
         // the whole bar, and the whole bar is not the same size everywhere: a
@@ -163,8 +173,27 @@ final class MeterNSView: NSView {
         //
         // `draw(_:)` repaints from scratch and never reads what was there
         // before, so it is correct under any clip.
-        if force || lastFillPx < 0 || lastPeakPx < 0 {
+        //
+        // What the scheme lacked was a way back. It assumes the layer holds
+        // exactly what the last `draw` put there, and nothing ever checks that
+        // assumption, so a single missed pixel would sit on screen until the
+        // window happened to be resized. I measured the arithmetic against every
+        // case I could construct and found no gap, and a standalone harness
+        // confirmed AppKit repairs the layer itself when the backing scale
+        // changes — so this is not a fix for a leak I can name. It removes the
+        // *permanence*, which is the part that turns any leak, from any cause,
+        // into a defect the user has to look at all day.
+        //
+        // The counter deliberately runs on every tick rather than only on ticks
+        // that moved the bar. A meter that has stopped moving — muted channel,
+        // unplugged device — would otherwise keep whatever it last drew forever,
+        // and that is exactly the state in which a leftover pixel is most
+        // visible, because nothing else on the bar is lit. One full repaint per
+        // second against twenty partial ones did not move the measured CPU at
+        // all (5.4% before and after, three microphones live).
+        if force || lastFillPx < 0 || lastPeakPx < 0 || repairDue {
             needsDisplay = true
+            ticksSinceFullRepaint = 0
         } else {
             var dirty = span(from: lastFillPx, to: fill)
             if !isReductionMeter {
@@ -199,6 +228,7 @@ final class MeterNSView: NSView {
         // Pixel positions were computed against the old size.
         lastFillPx = -1
         lastPeakPx = -1
+        ticksSinceFullRepaint = 0
         needsDisplay = true
     }
 
@@ -286,24 +316,39 @@ final class MeterNSView: NSView {
     /// shows a quantity with no reference, which is why a user can watch it for
     /// weeks and still not know whether they are aiming right.
     ///
-    /// The band is a thin rail along one edge, not a filled block. Filling the
-    /// full thickness worked on an 8pt vertical bar and failed badly on a wide
-    /// horizontal one: a green rectangle a third of the meter long reads as
-    /// *level*, which is precisely the misreading these marks exist to prevent.
-    /// A rail cannot be mistaken for a bar. It still sits under the level, so a
-    /// correctly set signal covers it — guidance while you set up, gone once you
-    /// are there.
+    /// The band is drawn as a *lighter piece of the track*, spanning the full
+    /// thickness, and never in a level colour. Two earlier attempts got this
+    /// wrong in the same way. A filled green block read as level. A thin green
+    /// rail was meant to fix that and did not: on an 8pt strip meter a 3pt rail
+    /// is more than a third of the bar's thickness and runs a third of its
+    /// length, so in a quiet room the only green thing on the meter was a mark
+    /// that never moved — reported, correctly, as a stripe stuck in the middle
+    /// of the bar. A meter that prints "silent" in words while showing green in
+    /// the picture is simply lying.
+    ///
+    /// The rule this now follows: colour means level, brightness means scale.
+    /// Anything that does not move is neutral, so it cannot be read as a
+    /// quantity. The band still sits under the level, so a correctly set signal
+    /// covers it — guidance while you set up, gone once you are there.
     private func drawScale(
         _ ctx: CGContext, length: CGFloat, thickness: CGFloat, vertical: Bool
     ) {
         let lowPos  = meterPosition(meterTargetLowDB) * length
         let highPos = meterPosition(meterTargetHighDB) * length
-        let rail = max(2, min(3, thickness / 3)).rounded()
         if highPos > lowPos {
-            ctx.setFillColor(NSColor(Theme.meterGreen.opacity(0.55)).cgColor)
+            ctx.setFillColor(NSColor(Color(white: 1, opacity: 0.10)).cgColor)
             ctx.fill(vertical
-                ? CGRect(x: 0, y: lowPos, width: rail, height: highPos - lowPos)
-                : CGRect(x: lowPos, y: 0, width: highPos - lowPos, height: rail))
+                ? CGRect(x: 0, y: lowPos, width: thickness, height: highPos - lowPos)
+                : CGRect(x: lowPos, y: 0, width: highPos - lowPos, height: thickness))
+
+            // The two ends brighter, so the band can be located at a glance
+            // rather than only noticed. Whole pixels, or they blur away.
+            ctx.setFillColor(NSColor(Color(white: 1, opacity: 0.34)).cgColor)
+            for pos in [lowPos.rounded(), highPos.rounded()] where pos > 0 && pos < length {
+                ctx.fill(vertical
+                    ? CGRect(x: 0, y: pos, width: thickness, height: 1)
+                    : CGRect(x: pos, y: 0, width: 1, height: thickness))
+            }
         }
 
         // One tick per labelled level, spanning the full thickness so it reads
