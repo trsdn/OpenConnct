@@ -96,19 +96,66 @@ Observed behaviour:
   channel 1.
 - Selector `0x06` on channel 8 answers on channel 5 with several bytes of data.
 
+### Established: what the properties mean
+
+Worked out on 24 August 2026 by moving one control at a time on the shotgun
+microphone and watching which number moved, then checking the sequence against
+the manufacturer's own printed description of the buttons. It matches, which is
+what turns this from a plausible reading into a confirmed one.
+
+| Property | Control | Values |
+|---|---|---|
+| 0 | −20 dB pad | 0 off, 1 on |
+| 1 | High-pass filter | 0 off, 1 = 75 Hz, 2 = 150 Hz |
+| 2 | High-frequency boost | 0 off, 1 on |
+| 6 | Safety channel | 0 off, 1 on |
+| 3 | unidentified, constant `01` | — |
+| 7 | unidentified, constant `0` | — |
+| 4 | unidentified, seen as `0x5B` = 91 during a manufacturer session; absent from our own polls | — |
+
+The confirmation worth recording: the device has one button that cycles pad and
+safety channel together, in four steps — pad on, pad off and safety on, both on,
+both off. The captured sequence was exactly
+
+    0 = 1
+    0 = 0, 6 = 1
+    0 = 1, 6 = 1
+    0 = 0, 6 = 0
+
+Two independent properties producing that pattern from single presses of one
+button is not something that happens by coincidence.
+
+Property 1 is a three-state value, which is the shape of the high-pass filter
+and of nothing else on the device. Property 2 changed only on a long press of
+the filter button, which is the high-frequency boost.
+
+`tools/deviceprobe --window` is the tool that produced this and is the tool to
+use for the remaining ones: it shows each property live, lights up the row that
+changed, and has a field to name it.
+
 ### Not established
 
-**What the six properties mean, and how to set one.** All six currently read
-zero and none of them moves when the audio-class gain is changed, so none of
-them is gain. Mapping them needs a ground-truth event: change exactly one thing
-on the device and see which number moves.
+**The session.** The device answers nothing until the manufacturer's
+application has been started. With that application running, our own polls are
+answered normally, from a separate unsigned process, so this is not exclusivity
+or ownership — the device simply ignores everyone until someone says the right
+thing to it. Quit that application and the device goes silent again within
+seconds.
 
-`tools/deviceprobe` exists for that:
+The opening move is on channel 4: the application asks selectors 0, 1, 2 and 3
+there at startup and gets long structured replies on channel 3, and only
+afterwards does anything else answer. Asking those same four selectors cold,
+with a zero payload, gets the first one **refused** and the rest ignored. So the
+selectors are right and the payload is not.
 
-    tools/deviceprobe/build_deviceprobe.sh
-    tools/deviceprobe/build/OCDeviceProbe --watch --pid 0x001A
+That last step cannot be read off the wire with an input-report callback, which
+only sees what the device sends and never what another process wrote. Finishing
+it needs either a USB-level capture or a small number of payload variants tried
+deliberately.
 
-Then move one switch on the microphone. The line that appears is that switch.
+**How to set a property.** Not attempted. Reading is solved; writing is not.
+There is no point guessing at it before the session is understood, because a
+write will be ignored for the same reason a read is.
 
 Static extraction was tried and failed. The vendor application is a single
 70 MB native binary, not a script bundle. Its C++ symbols are not stripped and
@@ -131,6 +178,23 @@ letters mean something else. "Almost certainly" is not a safety property.
 and checks every write against it. Channel 2 is not in the set, so the tool
 cannot address channel 1's request side at all, whatever it is asked to do. Any
 code that later gains the ability to write settings should keep that constraint.
+
+Channel 4 was added to the permitted set once it was clear the device ignores
+everything until it is asked something there. That is a different channel from
+the dangerous one, and the reason for adding it is written down beside the
+constant so that nobody widens the set again without a reason of the same kind.
+
+## What this now means for the app
+
+Reading the device's real state is solved, and it is worth being precise about
+what that is worth on its own. Four of the settings the app currently
+implements in software — pad, high-pass filter, high-frequency boost and the
+safety channel — exist in the microphone, are switched by its buttons, and can
+be read out. So the app can at minimum stop guessing: it can show what the
+device is actually doing, and it can stop applying its own high-pass on top of
+one the microphone is already applying.
+
+Writing still needs the session, and until then nothing changes on screen.
 
 ## Why this is not in the app yet
 
