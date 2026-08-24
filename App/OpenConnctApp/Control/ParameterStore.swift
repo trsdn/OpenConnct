@@ -334,6 +334,11 @@ final class ParameterStore: ObservableObject {
         let before = channels[index]
         var after = before
         mutate(&after)
+        // Any deliberate change to mute retires the explanation for an automatic
+        // one. Checked on mute alone rather than on any edit: adjusting a
+        // channel's gain is not an answer to "why is this silent", so the note
+        // should survive that.
+        if after.muted != before.muted { after.arrivedMuted = false }
         guard after != before else { return }
         channels[index] = after
         pushChanged(channel: index, from: before, to: after)

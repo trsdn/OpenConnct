@@ -113,11 +113,45 @@ struct ChannelSettings: Codable, Equatable, Identifiable {
     var muted: Bool = false
     var soloed: Bool = false
 
+    /// Set when this app muted the channel by itself, on first ever sighting of
+    /// the device, and cleared the moment the user touches the mute button.
+    ///
+    /// It exists so the strip can say *why* it is muted. A channel silenced for
+    /// a reason the user did not choose is a small mystery, and a mixer full of
+    /// muted strips after a few weeks of different headsets connecting
+    /// themselves would be a worse problem than the one the muting solves.
+    ///
+    /// Persisted, so the explanation survives a relaunch: a device plugged in
+    /// just before quitting should not have lost its note by the time anybody
+    /// looks at it.
+    var arrivedMuted: Bool = false
+
     var id: String { deviceUID }
 
+    /// A device this app has not seen before.
+    ///
+    /// Starts muted, deliberately. Anything that presents itself as an input on
+    /// macOS lands here, including wireless headsets that connect on their own
+    /// because they came out of a case or because the machine woke up. Mixed in
+    /// unasked, such a device gives the far end of a call an echo — or the same
+    /// voice twice, slightly apart — and the user finds out from whoever they
+    /// are talking to, which is the wrong moment.
+    ///
+    /// This is not a judgement about the device. No attempt is made to guess
+    /// which inputs are "real" microphones: filtering by transport, by name or
+    /// by channel count works on the devices it was written against and then
+    /// quietly does the wrong thing on the next one. Muted is the right start
+    /// for every device, whatever it is, because it costs one click to undo and
+    /// the alternative costs a conversation.
+    ///
+    /// Applies to a *first sighting*, never to a reconnection — settings are
+    /// keyed by device UID, so a microphone that has been in use for weeks keeps
+    /// its state when it is unplugged overnight.
     init(deviceUID: String, deviceName: String) {
         self.deviceUID = deviceUID
         self.deviceName = deviceName
+        self.muted = true
+        self.arrivedMuted = true
     }
 
     // MARK: Decoding
@@ -142,7 +176,7 @@ struct ChannelSettings: Codable, Equatable, Identifiable {
         case hpfMode, hpfFrequency
         case gateEnabled, compressorEnabled, exciterEnabled, bassEnhancerEnabled
         case gate, compressor, exciter, bassEnhancer
-        case faderDB, muted, soloed
+        case faderDB, muted, soloed, arrivedMuted
         case legacyBassEnhancerEnabled = "bigBottomEnabled"
         case legacyBassEnhancer = "bigBottom"
     }
@@ -183,6 +217,10 @@ struct ChannelSettings: Codable, Equatable, Identifiable {
         faderDB = try c.decodeIfPresent(Float.self, forKey: .faderDB) ?? 0
         muted = try c.decodeIfPresent(Bool.self, forKey: .muted) ?? false
         soloed = try c.decodeIfPresent(Bool.self, forKey: .soloed) ?? false
+        // Absent in settings written before this existed, and false is right for
+        // those: a device already known to an older version is not a first
+        // sighting, so it has nothing to explain.
+        arrivedMuted = try c.decodeIfPresent(Bool.self, forKey: .arrivedMuted) ?? false
     }
 
     // Written by hand too, so the legacy keys are read but never written back.
@@ -208,6 +246,7 @@ struct ChannelSettings: Codable, Equatable, Identifiable {
         try c.encode(faderDB, forKey: .faderDB)
         try c.encode(muted, forKey: .muted)
         try c.encode(soloed, forKey: .soloed)
+        try c.encode(arrivedMuted, forKey: .arrivedMuted)
     }
 }
 

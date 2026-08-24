@@ -163,6 +163,32 @@ make uninstall-driver
 
 5. Settings are **persisted per device UID**. Unplug a mic and plug it back in — its strip remembers every parameter.
 
+### New devices arrive muted
+
+A device OpenConnct has never seen before starts **muted**, and its mute button
+is amber rather than red — the same colour the mixer already uses for a channel
+that is silent without the user having pressed anything.
+
+This exists because devices connect on their own. Wireless earbuds come out of a
+case, or the machine wakes up, and macOS presents them as an input. Mixed in
+unasked, they give the far end of a call an echo, or the same voice twice and
+slightly apart — and you find out from whoever you are talking to.
+
+Two things it deliberately does *not* do:
+
+- **It does not guess which inputs are real microphones.** Filtering by
+  transport, name, or channel count works on the devices it was written against
+  and then quietly does the wrong thing on the next one. Every unknown device is
+  treated the same way, because one click undoes it and the alternative costs a
+  conversation.
+- **It does not apply to reconnections.** Settings are keyed by device UID, so a
+  microphone in daily use keeps its state when it is unplugged overnight. Only a
+  genuine first sighting is muted.
+
+The first launch after installing OpenConnct is therefore silent until you
+unmute — every attached device is a first sighting. That is annoying exactly
+once.
+
 ---
 
 ## Architecture

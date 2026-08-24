@@ -121,14 +121,22 @@ struct VerticalFader: View {
 private struct MuteButton: View {
     let muted: Bool         // user-set mute
     let effectivelyMuted: Bool  // includes solo-induced silence
+    /// Muted by the app on first sighting rather than by the user.
+    let automatic: Bool
     let action: () -> Void
 
     // Colour meaning:
     //   Active mute  → accent red
-    //   Solo-silenced (not muted) → dim amber
+    //   Silenced but not by this button → dim amber
     //   Normal        → raised (off)
+    //
+    // A device muted on arrival takes the amber rather than the red, which is
+    // the same distinction the strip already draws for a channel silenced by
+    // somebody else's solo: the channel is quiet, and the user did not do it.
+    // Reusing that colour rather than inventing a third means there is one thing
+    // to learn instead of two.
     private var bgColor: Color {
-        if muted { return Theme.accent }
+        if muted { return automatic ? Theme.soloDim : Theme.accent }
         if effectivelyMuted { return Theme.soloDim }
         return Theme.raised
     }
@@ -147,10 +155,26 @@ private struct MuteButton: View {
                 .background(RoundedRectangle(cornerRadius: Theme.radiusSmall).fill(bgColor))
         }
         .buttonStyle(.plain)
-        .help(muted ? "Unmute" : "Mute")
+        .help(helpText)
         .accessibilityLabel(Text("Mute"))
-        .accessibilityValue(Text(muted ? "On" : effectivelyMuted ? "Silenced by solo" : "Off"))
+        .accessibilityValue(Text(accessibilityValue))
         .accessibilityAddTraits(muted ? .isSelected : [])
+    }
+
+    /// Says why, not just what. "Unmute" on a channel the user never muted
+    /// answers the wrong question.
+    private var helpText: String {
+        if automatic {
+            return "New device — muted on arrival so it could not join the mix "
+                + "unheard. Click to unmute."
+        }
+        return muted ? "Unmute" : "Mute"
+    }
+
+    private var accessibilityValue: String {
+        if automatic { return "On, muted automatically because this device is new" }
+        if muted { return "On" }
+        return effectivelyMuted ? "Silenced by solo" : "Off"
     }
 }
 
@@ -319,7 +343,8 @@ struct ChannelStripView: View {
             HStack(spacing: 4) {
                 MuteButton(
                     muted: settings.muted,
-                    effectivelyMuted: effectivelyMuted
+                    effectivelyMuted: effectivelyMuted,
+                    automatic: settings.arrivedMuted
                 ) {
                     store.update(uid) { $0.muted.toggle() }
                 }
