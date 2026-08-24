@@ -96,6 +96,35 @@ Observed behaviour:
   channel 1.
 - Selector `0x06` on channel 8 answers on channel 5 with several bytes of data.
 
+### Established: the session, and the byte that was missing
+
+The device answers nothing at all — on any channel — until it has been asked
+the four opening questions on channel 4, selectors 0 to 3. After that it
+answers normally, from an unsigned process of our own, with no other
+application running.
+
+This took a while because of one byte. `IOHIDDeviceSetReport` takes the report
+identifier as an argument, and Apple's documentation implies that is enough.
+It is not: this device wants the identifier **also as the first byte of the
+buffer**, with the length counting it. Sent without it, every field arrives one
+place out of position and the device refuses the request — which reads exactly
+like a permissions or session problem and is not one.
+
+That was not guessed. The manufacturer's application was disassembled around
+its call to `IOHIDDeviceSetReport`, which does:
+
+    strb  w21, [x0], #1     ; report id into the first byte
+    memcpy                   ; payload after it
+    mov   x4, x23            ; length = payload + 1
+    bl    _IOHIDDeviceSetReport
+
+and takes a separate path with no prefix when the identifier is zero.
+
+The request's first payload byte selects which property comes back. Asking for
+0 returns property 0 and nothing else, so reading the block means asking eight
+times. Requests must be paced: asked back to back the device answers about a
+quarter of them, spaced by ten milliseconds it answers all of them.
+
 ### Established: what the properties mean
 
 Worked out on 24 August 2026 by moving one control at a time on the shotgun
@@ -135,33 +164,25 @@ changed, and has a field to name it.
 
 ### Not established
 
-**The session.** The device answers nothing until the manufacturer's
-application has been started. With that application running, our own polls are
-answered normally, from a separate unsigned process, so this is not exclusivity
-or ownership — the device simply ignores everyone until someone says the right
-thing to it. Quit that application and the device goes silent again within
-seconds.
+**How to set a property.** Not attempted yet, and there is one thing to settle
+before it is. A read request is `<property> <27 zero bytes>`. If the byte after
+the property number turns out to be a value rather than padding, then every
+read this tool performs is also a write of zero — harmless while everything
+already reads zero, and not harmless once something does not. The test is
+cheap: put the high-pass filter on 75 Hz with the button on the device, then
+poll. If it stays at 1, reads are reads.
 
-The opening move is on channel 4: the application asks selectors 0, 1, 2 and 3
-there at startup and gets long structured replies on channel 3, and only
-afterwards does anything else answer. Asking those same four selectors cold,
-with a zero payload, gets the first one **refused** and the rest ignored. So the
-selectors are right and the payload is not.
+**Three of the properties.** 5 is unused. 3 and 7 sit constant. 4 read `0x5B`
+once during a manufacturer session and zero since, so it is probably a
+measurement — battery charge would fit 91 — rather than a setting.
 
-That last step cannot be read off the wire with an input-report callback, which
-only sees what the device sends and never what another process wrote. Finishing
-it needs either a USB-level capture or a small number of payload variants tried
-deliberately.
-
-**How to set a property.** Not attempted. Reading is solved; writing is not.
-There is no point guessing at it before the session is understood, because a
-write will be ignored for the same reason a read is.
-
-Static extraction was tried and failed. The vendor application is a single
-70 MB native binary, not a script bundle. Its C++ symbols are not stripped and
-its interface strings are readable — which is how the *names* of the settings
-are known — but the protocol constants are plain enumerations and leave no
-trace in the binary's strings.
+Static extraction of the protocol constants failed, and it is worth saying why
+it failed while the disassembly of the transport succeeded. The vendor
+application is a single 70 MB native binary with its symbol table stripped;
+only its RTTI class names and interface strings survive, which is how the
+*names* of the settings are known. The protocol constants are plain
+enumerations and leave no trace. The transport, by contrast, is code, and code
+can be read.
 
 ## The part that can destroy a device
 
@@ -186,21 +207,31 @@ constant so that nobody widens the set again without a reason of the same kind.
 
 ## What this now means for the app
 
-Reading the device's real state is solved, and it is worth being precise about
-what that is worth on its own. Four of the settings the app currently
-implements in software — pad, high-pass filter, high-frequency boost and the
-safety channel — exist in the microphone, are switched by its buttons, and can
-be read out. So the app can at minimum stop guessing: it can show what the
-device is actually doing, and it can stop applying its own high-pass on top of
-one the microphone is already applying.
+Reading the device's real state is solved, with no other software running and
+no special permission. Four of the settings the app currently implements in
+software — pad, high-pass filter, high-frequency boost and the safety channel —
+exist in the microphone, are switched by its buttons, and can be read out.
 
-Writing still needs the session, and until then nothing changes on screen.
+That alone is worth having. The app can stop guessing: it can show what the
+device is actually doing, and it can stop applying its own high-pass on top of
+one the microphone is already applying, which is a real fault that is currently
+possible and silent.
+
+Writing is the remaining step, and it is now the only one.
 
 ## Why this is not in the app yet
 
-The transport is fully understood; the meaning is not. Shipping a control that
-writes bytes whose effect is unverified would be worse than the honest badge
-that currently says the app is doing the work itself. The seam is already in
-place — `ChannelProcessingMap.resolve` decides per control whether it runs in
-the device or in the app, so when a control gains a device-backed
-implementation, the interface follows on its own.
+Reading is solved and writing is not, so no control can yet be moved from the
+app to the device. Shipping a control that writes bytes whose effect is
+unverified would be worse than the honest badge that currently says the app is
+doing the work itself.
+
+The seam is already in place: `ChannelProcessingMap.resolve` decides per
+control whether it runs in the device or in the app, so when a control gains a
+device-backed implementation, the interface follows on its own.
+
+Two constraints for whoever does that work. Nothing here may run on the audio
+thread — a single request takes milliseconds and the device drops requests that
+are not paced. And a missing or silent device must stay a non-event: the app
+worked before any of this existed and must keep working when the control
+channel does not answer.

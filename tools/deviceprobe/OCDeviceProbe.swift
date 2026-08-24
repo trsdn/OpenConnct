@@ -44,6 +44,35 @@ private let propertyRequestReportID: UInt8 = 8
 /// Payload length the descriptor declares for that request channel.
 private let propertyRequestLength = 27
 
+/// Property numbers worth asking for. The request's first payload byte selects
+/// which one comes back — asking for zero returns property zero and nothing
+/// else — so reading the whole block means asking eight times.
+private let propertySelectors: [UInt8] = [0, 1, 2, 3, 4, 5, 6, 7]
+
+/// Asks for one property.
+@discardableResult
+private func requestProperty(_ device: IOHIDDevice, _ selector: UInt8) -> Bool {
+    var request = [UInt8](repeating: 0, count: propertyRequestLength)
+    request[0] = selector
+    return send(device, reportID: propertyRequestReportID, payload: request)
+}
+
+/// Asks for every property once, paced.
+///
+/// The pacing is deliberate. Asked back to back the device answers perhaps a
+/// quarter of the questions and drops the rest; leave a gap and it answers all
+/// of them. Nothing is gained by asking faster, so it asks slowly, and it waits
+/// by running the run loop rather than by sleeping, so replies arrive while it
+/// waits instead of piling up.
+private func pollProperties(_ device: IOHIDDevice) -> (sent: Int, failed: Int) {
+    var failed = 0
+    for selector in propertySelectors {
+        if !requestProperty(device, selector) { failed += 1 }
+        CFRunLoopRunInMode(.defaultMode, 0.015, false)
+    }
+    return (propertySelectors.count, failed)
+}
+
 /// The channel the manufacturer's application queries at startup, and the
 /// length its descriptor declares for it. Until something is asked here the
 /// device answers nothing at all, on any channel.
@@ -55,17 +84,13 @@ private let sessionSelectors: [UInt8] = [0, 1, 2, 3]
 /// Asks the device the same four opening questions the manufacturer's
 /// application asks at startup.
 ///
-/// This is not yet enough. Asked cold, the device refuses the first question
-/// and ignores the rest, where the same selectors answered with data for the
-/// manufacturer's application. So the selectors are right and something else
-/// about the request is not — most likely its payload, which cannot be read
-/// off the wire with an input-report callback because that only sees what the
-/// device sends, never what another process wrote.
+/// The device answers nothing at all until this has been done — not on this
+/// channel and not on any other. Afterwards it answers normally, from an
+/// unsigned process of our own, with no other application involved.
 ///
-/// It is kept because the refusal is itself the finding: cold, the device says
-/// nothing at all, and after this it says "no". That is the difference between
-/// a device that is asleep and a device that is declining, and it is where the
-/// next attempt should start. See docs/device-control.md.
+/// This failed for a while and the reason is worth keeping: the requests were
+/// being sent without the leading report identifier byte, so every field
+/// arrived one place out of position and the device refused them. See `send`.
 private func openSession(_ device: IOHIDDevice) {
     for selector in sessionSelectors {
         var request = [UInt8](repeating: 0, count: sessionRequestLength)
@@ -156,6 +181,14 @@ private func matchingDevices(pid: Int?) -> [IOHIDDevice] {
 }
 
 /// The only place in this program that writes to a device.
+///
+/// The report identifier goes in twice: once as the argument, and once as the
+/// first byte of the buffer, with the length counting it. That is not what
+/// Apple's documentation implies and it is not a guess — it is what the
+/// manufacturer's own application does, read out of its compiled code, which
+/// prepends the identifier with `strb w21, [x0], #1` and then passes
+/// `length + 1`. Sending the payload without it puts every field one byte out
+/// of place, which is what a device reports as a refusal.
 @discardableResult
 private func send(_ device: IOHIDDevice, reportID: UInt8, payload: [UInt8]) -> Bool {
     guard writableReportIDs.contains(reportID) else {
@@ -164,8 +197,9 @@ private func send(_ device: IOHIDDevice, reportID: UInt8, payload: [UInt8]) -> B
                 .data(using: .utf8)!)
         return false
     }
+    let framed = [reportID] + payload
     let result = IOHIDDeviceSetReport(
-        device, kIOHIDReportTypeOutput, CFIndex(reportID), payload, payload.count)
+        device, kIOHIDReportTypeOutput, CFIndex(reportID), framed, framed.count)
     if result != kIOReturnSuccess {
         print(String(format: "   write failed: 0x%08X", result))
         return false
@@ -294,14 +328,10 @@ private func watch(pid: Int?, passive: Bool, seconds: Double) {
     let deadline = Date().addingTimeInterval(seconds)
     while Date() < deadline {
         if !passive {
-            // The request that was observed to produce a full property dump.
-            var request = [UInt8](repeating: 0, count: propertyRequestLength)
-            request[0] = 0x00
             for device in devices {
-                writesSent += 1
-                if !send(device, reportID: propertyRequestReportID, payload: request) {
-                    writesFailed += 1
-                }
+                let outcome = pollProperties(device)
+                writesSent += outcome.sent
+                writesFailed += outcome.failed
             }
         }
         CFRunLoopRunInMode(.defaultMode, passive ? 1.0 : 0.5, false)
@@ -514,12 +544,14 @@ private func monitor(pid: Int?) {
             device, CFRunLoopGetMain(), CFRunLoopMode.commonModes.rawValue)
     }
 
-    let timer = Timer(timeInterval: 0.2, repeats: true) { _ in
-        var request = [UInt8](repeating: 0, count: propertyRequestLength)
-        request[0] = 0x00
-        for device in devices {
-            send(device, reportID: propertyRequestReportID, payload: request)
-        }
+    // One property per tick rather than a burst, so the window never blocks and
+    // the device is never flooded. A full round trip takes about a third of a
+    // second, which is faster than a person can move a switch.
+    var nextSelector = 0
+    let timer = Timer(timeInterval: 0.04, repeats: true) { _ in
+        let selector = propertySelectors[nextSelector % propertySelectors.count]
+        nextSelector += 1
+        for device in devices { requestProperty(device, selector) }
     }
     RunLoop.main.add(timer, forMode: .common)
     let window = NSWindow(
