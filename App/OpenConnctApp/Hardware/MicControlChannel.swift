@@ -110,11 +110,38 @@ final class MicControlChannel {
 
     // MARK: - Lifecycle
 
+    /// Whether macOS will let this app talk to a microphone's control channel.
+    ///
+    /// `IOHIDDeviceOpen` is gated behind Input Monitoring — the permission whose
+    /// description says "monitor input from your keyboard, even while using
+    /// other apps". Reading four switch positions from a microphone is nothing
+    /// like that, but the check is on the API and not on what is done with it,
+    /// and Apple grants no exemption for vendor-defined usage pages.
+    ///
+    /// So: **checked, never requested.** An audio mixer that puts a
+    /// keyboard-monitoring prompt in front of somebody on first launch has
+    /// earned every bit of the suspicion it gets, and no reasonable person can
+    /// tell from that prompt what is actually being asked for. The feature this
+    /// enables is a convenience — noticing that the microphone's own filter is
+    /// already on so the same filter is not applied twice — and a convenience
+    /// does not get to demand that.
+    ///
+    /// Without the permission the app behaves exactly as it did before the
+    /// reader existed: the controls say the switch cannot be seen, which is
+    /// then true. `IOHIDRequestAccess`, which is what raises the prompt, is not
+    /// called anywhere in this project.
+    static var isPermitted: Bool {
+        IOHIDCheckAccess(kIOHIDRequestTypeListenEvent) == kIOHIDAccessTypeGranted
+    }
+
     /// Starts looking for microphones with a control channel.
     ///
     /// Safe to call when none are attached, and safe to call on a machine where
-    /// none ever will be: the thread sits idle and nothing is written.
+    /// none ever will be: the thread sits idle and nothing is written. Also safe
+    /// to call without permission — it simply does nothing, silently and without
+    /// asking for any.
     func start() {
+        guard Self.isPermitted else { return }
         guard thread == nil else { return }
         let thread = Thread { [weak self] in self?.run() }
         thread.name = "audio.openconnct.miccontrol"

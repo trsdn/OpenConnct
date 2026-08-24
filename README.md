@@ -189,6 +189,32 @@ The first launch after installing OpenConnct is therefore silent until you
 unmute — every attached device is a first sighting. That is annoying exactly
 once.
 
+### Permissions: what OpenConnct asks for, and what it does not
+
+OpenConnct asks for **microphone access**, and nothing else.
+
+Some microphones carry their own filter and pad switches on the body, and
+OpenConnct can read their positions to warn you when a filter is already on and
+you are about to apply the same one twice. macOS puts that behind **Input
+Monitoring** — the permission described as watching "input from your keyboard,
+even while using other apps" — because the check is on the HID API rather than
+on what is done with it, and [Apple grants no exemption for vendor-defined usage
+pages](https://developer.apple.com/forums/thread/724608).
+
+**OpenConnct never requests it.** `IOHIDRequestAccess`, the call that raises the
+prompt, appears nowhere in this project; `MicControlChannel` calls
+`IOHIDCheckAccess` and stays switched off unless the permission is already there.
+An audio mixer that puts a keyboard-monitoring prompt in front of somebody on
+first launch has earned the suspicion it gets.
+
+Without it, nothing is missing: the controls say the microphone's own switch
+cannot be seen, which is then simply true. If you want the feature, switch
+OpenConnct on under **System Settings → Privacy & Security → Input Monitoring**.
+It reads switch positions and writes nothing — see
+[`docs/device-control.md`](docs/device-control.md) for why writing is not
+possible at all. The **Technical details** panel in the app shows which of the
+two states you are in.
+
 ---
 
 ## Architecture

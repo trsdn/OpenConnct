@@ -235,9 +235,50 @@ struct DiagnosticsDetail: View {
                     }
                 }
             }
+
+            Divider().background(Theme.border)
+            micControlSection
         }
         .padding(14)
         .frame(width: 320, alignment: .leading)
+    }
+
+    /// Explains the one permission OpenConnct can use but never asks for.
+    ///
+    /// It lives here rather than in a first-launch prompt on purpose. macOS
+    /// calls the permission "Input Monitoring" and describes it as watching the
+    /// keyboard, which is a fair description of what it usually guards and a
+    /// terrible description of what it is wanted for here. Asked cold, it is not
+    /// a question anybody can answer sensibly.
+    @ViewBuilder
+    private var micControlSection: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text("Reading the switches on a microphone")
+                .font(Theme.labelFont)
+                .foregroundColor(Theme.textSecondary)
+
+            if MicControlChannel.isPermitted {
+                Text("On. Some microphones have their own filter and pad "
+                     + "switches on the body. OpenConnct reads their positions "
+                     + "so it can tell you when a filter is already on and you "
+                     + "are about to apply it a second time. It only reads, and "
+                     + "only from microphones — never the keyboard.")
+                    .font(Theme.captionFont)
+                    .foregroundColor(Theme.textDisabled)
+                    .fixedSize(horizontal: false, vertical: true)
+            } else {
+                Text("Off, and nothing is missing without it. macOS puts this "
+                     + "behind \"Input Monitoring\", the same permission that "
+                     + "guards keyboard logging, and grants no exception for "
+                     + "microphones. OpenConnct will not ask you for it. If you "
+                     + "want it, switch OpenConnct on under Privacy & Security → "
+                     + "Input Monitoring; the app reads switch positions and "
+                     + "writes nothing.")
+                    .font(Theme.captionFont)
+                    .foregroundColor(Theme.textDisabled)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
     }
 
     @ViewBuilder
