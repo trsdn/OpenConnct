@@ -162,27 +162,56 @@ the filter button, which is the high-frequency boost.
 use for the remaining ones: it shows each property live, lights up the row that
 changed, and has a field to name it.
 
-### Not established
+### Established: reads are reads, and there is no write
 
-**How to set a property.** Not attempted yet, and there is one thing to settle
-before it is. A read request is `<property> <27 zero bytes>`. If the byte after
-the property number turns out to be a value rather than padding, then every
-read this tool performs is also a write of zero — harmless while everything
-already reads zero, and not harmless once something does not. The test is
-cheap: put the high-pass filter on 75 Hz with the button on the device, then
-poll. If it stays at 1, reads are reads.
+Setting a property was attempted across every write channel the device declares
+except the firmware one, at four byte positions, with and without the verb byte
+the manufacturer's software uses on its other hardware. Twelve combinations.
+The device acknowledged the transport every time and changed nothing, and the
+value always read back as it was before.
+
+That is a negative result, so it needs corroborating rather than asserting.
+The manufacturer's application was disassembled at every one of the 61 calls to
+its own send routine, and the report identifiers it passes as immediates are
+1, 2, 3, 4, 5, 7, 9 and 15. **It never writes to 6 or 8**, the two channels
+that carry this device's property traffic.
+
+The set-shaped payload does exist in that binary:
+
+    strb w25, [x19]        ; byte 0: which setting
+    mov  w8, #0x1
+    strb w8,  [x19, #0x1]  ; byte 1: set
+    strb w23, [x19, #0x2]  ; byte 2: value
+    ... mov w2, #0x9       ; on report 9
+
+but report 9 is not in this device's descriptor, which declares 1 to 8 and
+nothing else. That payload is for other hardware from the same manufacturer.
+
+So the conclusion is not "the command was not found". It is that the
+manufacturer's own software does not send one either, which agrees with its
+interface — it offers no control for these switches — and with the printed
+instructions, which describe them only as buttons on the body.
+
+**These switches are readable and not settable.** Treat that as the answer
+until someone produces a capture of a device changing state without a finger on
+it.
+
+A useful side effect: since writing a value into the request does nothing, the
+zero bytes a read request carries are padding, and reading is safe to do
+repeatedly.
+
+### Not established
 
 **Three of the properties.** 5 is unused. 3 and 7 sit constant. 4 read `0x5B`
 once during a manufacturer session and zero since, so it is probably a
 measurement — battery charge would fit 91 — rather than a setting.
 
 Static extraction of the protocol constants failed, and it is worth saying why
-it failed while the disassembly of the transport succeeded. The vendor
+that failed while the disassembly of the transport succeeded. The vendor
 application is a single 70 MB native binary with its symbol table stripped;
 only its RTTI class names and interface strings survive, which is how the
-*names* of the settings are known. The protocol constants are plain
-enumerations and leave no trace. The transport, by contrast, is code, and code
-can be read.
+*names* of the settings are known. The constants are plain enumerations and
+leave no trace. The transport, by contrast, is code, and code can be read.
 
 ## The part that can destroy a device
 
@@ -207,31 +236,35 @@ constant so that nobody widens the set again without a reason of the same kind.
 
 ## What this now means for the app
 
-Reading the device's real state is solved, with no other software running and
-no special permission. Four of the settings the app currently implements in
-software — pad, high-pass filter, high-frequency boost and the safety channel —
-exist in the microphone, are switched by its buttons, and can be read out.
+The original goal was to operate the microphone's switches from the app. That
+is not possible, and the section above is the evidence rather than an opinion.
+What is possible is the half that turned out to matter more.
 
-That alone is worth having. The app can stop guessing: it can show what the
-device is actually doing, and it can stop applying its own high-pass on top of
-one the microphone is already applying, which is a real fault that is currently
-possible and silent.
+**The app can read the device's real state**, with nothing else running and no
+special permission. Four settings it currently implements in software — pad,
+high-pass filter, high-frequency boost and the safety channel — exist in the
+microphone and can be read out.
 
-Writing is the remaining step, and it is now the only one.
+That fixes a fault that exists today and is silent. The app's high-pass offers
+75 Hz and 150 Hz, which are the same two frequencies printed on the device. If
+the switch on the body is set and the one on screen is too, the signal is
+filtered twice and the voice goes thin, with nothing on screen to explain it.
+The same applies to the pad: −20 dB and −20 dB. The app currently warns about
+this in words because it could not know; it can now know.
 
 ## Why this is not in the app yet
 
-Reading is solved and writing is not, so no control can yet be moved from the
-app to the device. Shipping a control that writes bytes whose effect is
-unverified would be worse than the honest badge that currently says the app is
-doing the work itself.
+The remaining work is a background reader, not a protocol question. Three
+constraints for whoever writes it.
 
-The seam is already in place: `ChannelProcessingMap.resolve` decides per
-control whether it runs in the device or in the app, so when a control gains a
-device-backed implementation, the interface follows on its own.
+Nothing here may run on the audio thread. A single request takes milliseconds
+and the device drops requests that are not paced, so this belongs on its own
+queue like the hardware gain does.
 
-Two constraints for whoever does that work. Nothing here may run on the audio
-thread — a single request takes milliseconds and the device drops requests that
-are not paced. And a missing or silent device must stay a non-event: the app
-worked before any of this existed and must keep working when the control
-channel does not answer.
+A missing or silent device must stay a non-event. The app worked before any of
+this existed and must keep working when the control channel does not answer, on
+every device that does not have one.
+
+The badge must keep following the signal path, not the hardware. A control the
+device applies and the app does not is `MIC`; a control the app applies is
+`APP`. `ChannelProcessingMap.resolve` is where that decision already lives.

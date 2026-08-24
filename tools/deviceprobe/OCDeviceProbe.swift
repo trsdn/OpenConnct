@@ -32,7 +32,17 @@ import SwiftUI
 /// asked something there: the manufacturer's own application queries it four
 /// times at startup, and only afterwards does the device answer anything else.
 /// That was established by watching, not guessed — see docs/device-control.md.
-private let writableReportIDs: Set<UInt8> = [4, 8]
+///
+/// Channel 6 is included to look for a write path. Channel 8 reads properties
+/// but does not set them, tested at four byte positions and with the verb byte
+/// the manufacturer's application uses on other hardware. Channel 6 is the only
+/// declared write channel left that is not the firmware one.
+private let writableReportIDs: Set<UInt8> = [4, 6, 8]
+
+/// Payload length per write channel, as the device's own descriptor declares
+/// it. Sending the wrong length is how a request ends up misread as a different
+/// command, so this is taken from the descriptor rather than assumed uniform.
+private let requestLengths: [UInt8: Int] = [4: 28, 6: 14, 8: 27]
 
 // MARK: - Protocol shape, as measured
 
@@ -580,10 +590,108 @@ private func usage() {
       --passive             with --watch: listen only, never write
       --pid 0xNNNN          restrict --watch or --window to one product
       --seconds N           how long --watch runs (default 60)
+      --set P V             read property P, try to set it to V, read it back,
+                            and put it back the way it was
+      --at N                with --set: which byte of the request carries the
+                            value (default 1)
 
     This tool only ever writes to one request channel, and never to the one that
     carries firmware commands on related products.
     """)
+}
+
+
+/// Attempts to set one property, and proves the outcome rather than reporting it.
+///
+/// The order is read, write, read. A write that claims success and changes
+/// nothing is the failure mode that matters here, and only the second read can
+/// tell the two apart. The value the device reports afterwards is the answer;
+/// the acknowledgement byte is not, because the device acknowledges requests it
+/// does not act on.
+///
+/// The guessed layout is `<property> <value>` in the same channel used for
+/// reading. If that is right, then reads — which send zero in the value
+/// position — have been writing zero all along, which is why this prints the
+/// value it read first and restores it at the end.
+private func setProperty(pid: Int?, number: UInt8, value: UInt8, at offset: Int, verb: UInt8?, channel: UInt8) {
+    let devices = matchingDevices(pid: pid)
+    guard let device = devices.first else {
+        print("No matching device.")
+        return
+    }
+    let productID = (property(device, kIOHIDProductIDKey) as? Int) ?? 0
+    _ = IOHIDDeviceOpen(device, IOOptionBits(kIOHIDOptionsTypeNone))
+    let buffer = UnsafeMutablePointer<UInt8>.allocate(capacity: 64)
+    buffer.initialize(repeating: 0, count: 64)
+    let box = WatchContext(productID: productID, seen: SeenValues(), started: Date())
+    IOHIDDeviceRegisterInputReportCallback(
+        device, buffer, 64,
+        { ctx, _, _, _, reportID, report, length in
+            guard let ctx, UInt8(reportID) == propertyReplyReportID, length >= 4
+            else { return }
+            let state = Unmanaged<WatchContext>.fromOpaque(ctx).takeUnretainedValue()
+            var bytes: [UInt8] = []
+            for i in 0..<length { bytes.append(report[i]) }
+            state.seen.values[bytes[1]] = trimmingTrailingZeros(Array(bytes[3...]))
+        }, Unmanaged.passRetained(box).toOpaque())
+    IOHIDDeviceScheduleWithRunLoop(
+        device, CFRunLoopGetCurrent(), CFRunLoopMode.defaultMode.rawValue)
+    openSession(device)
+
+    func read() -> UInt8? {
+        box.seen.values.removeValue(forKey: number)
+        for _ in 0..<4 {
+            requestProperty(device, number)
+            CFRunLoopRunInMode(.defaultMode, 0.05, false)
+            if let v = box.seen.values[number] { return v.first ?? 0 }
+        }
+        return nil
+    }
+
+    guard let before = read() else {
+        print("Property \(number) did not answer; nothing was written.")
+        return
+    }
+    print("before: property \(number) = \(before)")
+
+    let length = requestLengths[channel] ?? propertyRequestLength
+    guard offset < length else {
+        print("byte \(offset) is past the end of a \(length)-byte request")
+        return
+    }
+    var request = [UInt8](repeating: 0, count: length)
+    request[0] = number
+    if let verb { request[1] = verb }
+    request[offset] = value
+    let accepted = send(device, reportID: channel, payload: request)
+    CFRunLoopRunInMode(.defaultMode, 0.2, false)
+    print("write accepted by the transport: \(accepted)")
+
+    guard let after = read() else {
+        print("after: property \(number) stopped answering")
+        return
+    }
+    print("after:  property \(number) = \(after)")
+
+    if after == value && value != before {
+        print("RESULT: the write took effect.")
+    } else if after == before {
+        print("RESULT: no change. The value byte is not in this position, "
+            + "or this channel does not set.")
+    } else {
+        print("RESULT: changed, but not to what was asked. Do not build on this yet.")
+    }
+
+    if after != before {
+        print("restoring \(before)")
+        var restore = [UInt8](repeating: 0, count: length)
+        restore[0] = number
+        if let verb { restore[1] = verb }
+        restore[offset] = before
+        _ = send(device, reportID: channel, payload: restore)
+        CFRunLoopRunInMode(.defaultMode, 0.2, false)
+        print("restored to: \(read().map(String.init) ?? "no answer")")
+    }
 }
 
 let arguments = CommandLine.arguments
@@ -598,7 +706,30 @@ if let i = arguments.firstIndex(of: "--seconds"), i + 1 < arguments.count,
     duration = value
 }
 
-if arguments.contains("--descriptor") {
+var valueOffset = 1
+if let i = arguments.firstIndex(of: "--at"), i + 1 < arguments.count,
+   let n = Int(arguments[i + 1]), n >= 1, n < propertyRequestLength {
+    valueOffset = n
+}
+var verbByte: UInt8?
+if let i = arguments.firstIndex(of: "--verb"), i + 1 < arguments.count {
+    verbByte = UInt8(arguments[i + 1])
+}
+var writeChannel = propertyRequestReportID
+if let i = arguments.firstIndex(of: "--channel"), i + 1 < arguments.count,
+   let c = UInt8(arguments[i + 1]) {
+    writeChannel = c
+}
+var setPair: (UInt8, UInt8)?
+if let i = arguments.firstIndex(of: "--set"), i + 2 < arguments.count,
+   let p = UInt8(arguments[i + 1]), let v = UInt8(arguments[i + 2]) {
+    setPair = (p, v)
+}
+
+if let pair = setPair {
+    setProperty(pid: selectedPID, number: pair.0, value: pair.1, at: valueOffset,
+                verb: verbByte, channel: writeChannel)
+} else if arguments.contains("--descriptor") {
     showDescriptors()
 } else if arguments.contains("--window") {
     monitor(pid: selectedPID)
