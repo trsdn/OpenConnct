@@ -263,6 +263,11 @@ private struct HPFRow: View {
 /// was switched — the exact jitter this pane was rebuilt to remove.
 private struct BodySwitchNote: View {
     let settings: ChannelSettings
+    /// What the microphone says about its own switches, or `nil` when it has no
+    /// control channel or has not answered yet. The two cases read very
+    /// differently to the user — a hedge versus a statement — and that
+    /// distinction is the point of passing it at all.
+    let reported: MicBodySwitches?
 
     var body: some View {
         Text(note ?? " ")
@@ -277,7 +282,8 @@ private struct BodySwitchNote: View {
     private var note: String? {
         ChannelProcessingMap.bodySwitchNote(
             padEnabled: settings.padEnabled,
-            highPassActive: settings.hpfMode != .off)
+            highPassActive: settings.hpfMode != .off,
+            reported: reported)
     }
 }
 
@@ -316,7 +322,9 @@ struct MicDetailView: View {
                             PadRow(settings: settings, store: store)
                             Divider().background(Theme.border)
                             HPFRow(settings: settings, store: store)
-                            BodySwitchNote(settings: settings)
+                            BodySwitchNote(
+                                settings: settings,
+                                reported: store.bodySwitches[settings.deviceUID])
                         }
                     }
 

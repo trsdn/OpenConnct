@@ -17,6 +17,14 @@ struct AudioInputDevice: Equatable, Identifiable {
     var inputChannels: Int
     var nominalSampleRate: Double
     var transportType: UInt32
+    /// The same physical device as seen on the USB bus, when it is one.
+    ///
+    /// CoreAudio and IOKit share no identifier, so this is recovered from the
+    /// two strings CoreAudio does publish. It is what lets a microphone's own
+    /// switches — which are only readable over its HID interface — be attributed
+    /// to the right channel. `nil` for built-in and virtual devices, which is
+    /// most of them.
+    var usbIdentity: USBDeviceIdentity?
 
     var id: String { uid }
 
@@ -136,7 +144,10 @@ final class AudioDeviceManager {
             name: name,
             inputChannels: inputChannelCount(of: id),
             nominalSampleRate: sampleRate(of: id),
-            transportType: transportType(of: id))
+            transportType: transportType(of: id),
+            usbIdentity: modelUID(of: id).flatMap {
+                USBDeviceIdentity.parse(uid: uid, modelUID: $0)
+            })
     }
 
     /// `kAudioDevicePropertyTransportType`, e.g. `usb `, `bltn`, `virt`.
@@ -177,6 +188,12 @@ final class AudioDeviceManager {
 
     func name(of id: AudioObjectID) -> String? {
         stringProperty(id, kAudioObjectPropertyName)
+    }
+
+    /// Identifies the *model* rather than the individual device, and on USB
+    /// hardware ends in the vendor and product identifiers.
+    func modelUID(of id: AudioObjectID) -> String? {
+        stringProperty(id, kAudioDevicePropertyModelUID)
     }
 
     func sampleRate(of id: AudioObjectID) -> Double {

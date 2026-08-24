@@ -37,7 +37,22 @@ final class ParameterStore: ObservableObject {
     /// whole point.
     private var reportedHardwareGain: [String: Float] = [:]
 
+    /// What each microphone reports about the switches on its own body.
+    ///
+    /// Absent for every device that has no control channel, which is most of
+    /// them, and absent until a device has answered. Absent means "cannot be
+    /// asked", and the interface hedges accordingly rather than claiming the
+    /// switches are off.
+    @Published private(set) var bodySwitches: [String: MicBodySwitches] = [:]
+
+    /// Which audio device each USB identity belongs to. Kept so that a reading
+    /// arriving from the HID side can be attributed to a channel without
+    /// searching, and so that a device unplugged on one bus clears its state on
+    /// the other.
+    private var deviceUIDsByUSBIdentity: [USBDeviceIdentity: String] = [:]
+
     private let hardwareGain = CoreAudioInputGain()
+    private let micControl = MicControlChannel()
 
     private let store = SettingsStore()
     private var saved: [String: ChannelSettings]
@@ -54,6 +69,13 @@ final class ParameterStore: ObservableObject {
         hardwareGain.onReportedGainChanged = { [weak self] uid, db in
             Task { @MainActor in self?.hardwareGainDidChange(uid: uid, db: db) }
         }
+        micControl.onSwitchesChanged = { [weak self] identity, switches in
+            Task { @MainActor in self?.bodySwitchesDidChange(identity, switches) }
+        }
+        micControl.onDeviceLost = { [weak self] identity in
+            Task { @MainActor in self?.bodySwitchesDeviceLost(identity) }
+        }
+        micControl.start()
     }
 
     func attach(engine: AudioEngine) {
@@ -136,10 +158,59 @@ final class ParameterStore: ObservableObject {
         channels = next
         meterHub.ensure(uids: next.map(\.deviceUID))
         reconcileHardwareGain(devices: devices)
+        reconcileBodySwitches(devices: devices)
         for (index, settings) in channels.enumerated() {
             pushAll(channel: index, settings: settings)
         }
         persist()
+    }
+
+    // MARK: - Switches on the microphone body
+
+    /// Keeps the audio-device view of the world and the USB view of it in step.
+    ///
+    /// The two buses discover and lose devices independently and in either
+    /// order, so neither side may assume the other has caught up. This is the
+    /// one place that reconciles them, and it errs towards forgetting: a reading
+    /// attributed to a device that is no longer here would be shown against
+    /// whatever took its place.
+    private func reconcileBodySwitches(devices: [AudioInputDevice]) {
+        let present = Set(devices.map(\.uid))
+        for (identity, uid) in deviceUIDsByUSBIdentity where !present.contains(uid) {
+            deviceUIDsByUSBIdentity.removeValue(forKey: identity)
+        }
+        for uid in bodySwitches.keys where !present.contains(uid) {
+            bodySwitches.removeValue(forKey: uid)
+        }
+        for device in devices {
+            guard let identity = device.usbIdentity else { continue }
+            deviceUIDsByUSBIdentity[identity] = device.uid
+        }
+    }
+
+    /// A microphone has reported its own switch positions.
+    ///
+    /// Arrives on the main queue, at most a few times a second, and only when
+    /// something actually moved. A reading for a device this app is not mixing
+    /// is kept anyway: the user may enable that device a moment later, and
+    /// having the answer already is better than showing a hedge until the next
+    /// poll comes round.
+    private func bodySwitchesDidChange(
+        _ identity: USBDeviceIdentity, _ switches: MicBodySwitches
+    ) {
+        guard let uid = deviceUIDsByUSBIdentity[identity] else { return }
+        guard bodySwitches[uid] != switches else { return }
+        bodySwitches[uid] = switches
+    }
+
+    /// A microphone with a control channel has been unplugged.
+    ///
+    /// Its last reported state is dropped rather than kept. Stale switch
+    /// positions are worse than none: the interface would state as fact
+    /// something about hardware that is no longer attached.
+    private func bodySwitchesDeviceLost(_ identity: USBDeviceIdentity) {
+        guard let uid = deviceUIDsByUSBIdentity.removeValue(forKey: identity) else { return }
+        bodySwitches.removeValue(forKey: uid)
     }
 
     // MARK: - Hardware gain
