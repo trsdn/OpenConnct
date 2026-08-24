@@ -252,19 +252,36 @@ filtered twice and the voice goes thin, with nothing on screen to explain it.
 The same applies to the pad: −20 dB and −20 dB. The app currently warns about
 this in words because it could not know; it can now know.
 
-## Why this is not in the app yet
+## How it is used in the app
 
-The remaining work is a background reader, not a protocol question. Three
-constraints for whoever writes it.
+`MicControlChannel` reads the four switches and hands them to `ParameterStore`,
+which shows them where they matter: the caution under the pad and filter
+controls. That caution used to hedge on every microphone. Now, when the device
+can be asked, it names the frequency that is being applied twice — and when the
+device says its switches are clear, it says nothing at all.
 
-Nothing here may run on the audio thread. A single request takes milliseconds
-and the device drops requests that are not paced, so this belongs on its own
-queue like the hardware gain does.
+Three things there were found by running it, not by reasoning about it, and are
+worth keeping in mind before changing it.
 
-A missing or silent device must stay a non-event. The app worked before any of
-this existed and must keep working when the control channel does not answer, on
-every device that does not have one.
+**Never write from inside a HID callback.** It does not fail, it *times out*,
+five seconds at a time, and takes the run loop with it. Adoption and every
+request go through a paced outbox on a timer, one per tick, outside any
+callback. That also supplies the pacing the device needs.
 
-The badge must keep following the signal path, not the hardware. A control the
-device applies and the app does not is `MIC`; a control the app applies is
-`APP`. `ChannelProcessingMap.resolve` is where that decision already lives.
+**Report identifiers alone do not identify this dialect.** An unrelated capture
+card declares the same three. The descriptor walk checks the declared payload
+lengths as well.
+
+**All-off and never-answered are opposite meanings.** A microphone with every
+switch off produces no changes and would never be heard from, which the
+interface would read as "cannot be asked". The first complete reading is
+announced whether or not anything moved.
+
+Matching is restricted to the vendor-defined usage page, which keeps this away
+from keyboards and pointing devices and out of reach of the input monitoring
+consent prompt.
+
+Not every microphone with this channel answers. Of the two developed against,
+only the one that physically has switches does; the other is never adopted and
+stays "cannot be asked", which is the correct answer for a device with no
+switches to report.
