@@ -31,6 +31,9 @@ typedef struct oc_channel_strip {
     oc_exciter exciter;
     oc_bass_enhancer bass_enhancer;
     oc_meter input_meter, output_meter;
+    /* Set by whichever process function ran last. Only the gain-reduction
+       readers consult it; see the note on them in the .cpp. */
+    int muted;
 } oc_channel_strip;
 
 void oc_channel_strip_init(oc_channel_strip *s, oc_sample_rate sr);
@@ -39,6 +42,10 @@ void oc_channel_strip_set_gain_db(oc_channel_strip *s, oc_float db);
 void oc_channel_strip_set_hpf(oc_channel_strip *s, oc_hpf_mode mode, oc_float frequency);
 void oc_channel_strip_set_bypasses(oc_channel_strip *s, int gate, int compressor, int exciter, int bass_enhancer);
 void oc_channel_strip_process(oc_channel_strip *s, const oc_float *in, oc_float *out, uint32_t n_frames);
+/* The channel is muted, so nothing it produces can be heard. Advances only the
+   state that has to stay truthful and skips the rest. Takes no output buffer,
+   because there is deliberately nothing to write. */
+void oc_channel_strip_process_muted(oc_channel_strip *s, const oc_float *in, uint32_t n_frames);
 oc_meter_values oc_channel_strip_input_meter(const oc_channel_strip *s);
 oc_meter_values oc_channel_strip_output_meter(const oc_channel_strip *s);
 oc_float oc_channel_strip_gate_gr_db(const oc_channel_strip *s);

@@ -705,4 +705,104 @@ final class OpenConnctDSPTests: XCTestCase {
         XCTAssertEqual(oc_channel_strip_gate_gr_db(&strip), 0)
         XCTAssertEqual(oc_channel_strip_comp_gr_db(&strip), 0)
     }
+
+    // MARK: - The muted path
+
+    private func makeStrip() -> oc_channel_strip {
+        var strip = oc_channel_strip()
+        oc_channel_strip_init(&strip, Double(sr))
+        return strip
+    }
+
+    private func tone(_ n: Int, amplitude: Float = 0.5, hz: Float = 220) -> [Float] {
+        (0..<n).map { amplitude * sin(2 * Float.pi * hz * Float($0) / sr) }
+    }
+
+    private func runMuted(_ strip: inout oc_channel_strip, _ input: [Float]) {
+        input.withUnsafeBufferPointer { ib in
+            oc_channel_strip_process_muted(&strip, ib.baseAddress!, UInt32(input.count))
+        }
+    }
+
+    private func runNormal(_ strip: inout oc_channel_strip, _ input: [Float]) {
+        var out = Array(repeating: Float(0), count: input.count)
+        input.withUnsafeBufferPointer { ib in
+            out.withUnsafeMutableBufferPointer { ob in
+                oc_channel_strip_process(&strip, ib.baseAddress!, ob.baseAddress!, UInt32(input.count))
+            }
+        }
+    }
+
+    // The whole point of measuring before pad, gain, fader and mute is that the
+    // reading survives all four. A device OpenConnct has never seen arrives
+    // muted, so a muted channel is exactly when someone wants to know whether it
+    // is picking anything up -- and it is what the gain calibration reads.
+    func testAMutedChannelStillMetersItsInput() {
+        var strip = makeStrip()
+        runMuted(&strip, tone(4800))
+
+        let peak = oc_channel_strip_input_meter(&strip).peak_db
+        XCTAssertEqual(peak, -6.02, accuracy: 0.2, "a muted channel must still show its input level")
+    }
+
+    // A meter that is simply not called freezes at its last reading. The output
+    // of a muted channel is silence, so its meter has to fall to silence.
+    func testTheOutputMeterOfAMutedChannelFallsToSilence() {
+        var strip = makeStrip()
+        runNormal(&strip, tone(4800))
+        XCTAssertGreaterThan(oc_channel_strip_output_meter(&strip).peak_db, -20,
+                             "precondition: the meter is showing something")
+
+        // 300 ms is the meter's time constant, not the time to reach silence:
+        // one second is 3.3 of them, so about 29 dB of fall. The point of the
+        // test is that it falls at all, so the bar is set well clear of a
+        // frozen reading rather than at some notional floor.
+        runMuted(&strip, Array(repeating: Float(0), count: 48000))
+        XCTAssertLessThan(oc_channel_strip_output_meter(&strip).peak_db, -30,
+                          "the output meter must fall rather than freeze")
+    }
+
+    // Same failure as a bypassed stage, arriving by a different route: the stage
+    // is no longer being run, so its last value would sit on the meter for as
+    // long as the mute lasts.
+    func testGainReductionReadsNothingWhileMuted() {
+        var strip = makeStrip()
+        oc_channel_strip_set_bypasses(&strip, 0, 0, 1, 1)
+        oc_compressor_configure(&strip.compressor, -40, 8, 1, 50, 0, 6, OC_DETECTOR_PEAK)
+        runNormal(&strip, tone(4800, amplitude: 0.9))
+        XCTAssertLessThan(oc_channel_strip_comp_gr_db(&strip), 0, "precondition: the compressor is working")
+
+        runMuted(&strip, tone(480, amplitude: 0.9))
+        XCTAssertEqual(oc_channel_strip_comp_gr_db(&strip), 0, "a muted channel must not show frozen reduction")
+        XCTAssertEqual(oc_channel_strip_gate_gr_db(&strip), 0)
+
+        // And it comes back the moment the channel does.
+        runNormal(&strip, tone(4800, amplitude: 0.9))
+        XCTAssertLessThan(oc_channel_strip_comp_gr_db(&strip), 0, "reduction must return on unmute")
+    }
+
+    // A gain changed during a mute should already be in position when the
+    // channel comes back, rather than sliding into place afterwards -- which is
+    // what would happen if the smoothers were simply not advanced.
+    func testGainChangedDuringAMuteIsInPositionOnReturn() {
+        var strip = makeStrip()
+        oc_channel_strip_set_gain_db(&strip, 12)
+
+        // 5 ms of smoothing, so 100 ms of mute is ample.
+        runMuted(&strip, Array(repeating: Float(0), count: 4800))
+
+        let expected = pow(10, Float(12) / 20)
+        XCTAssertEqual(strip.gain.current, expected, accuracy: expected * 0.01,
+                       "the gain smoother must arrive during the mute, not after it")
+
+        // And the very first sample back is already at the new gain.
+        var out = [Float](repeating: 0, count: 1)
+        var input: [Float] = [1.0]
+        input.withUnsafeBufferPointer { ib in
+            out.withUnsafeMutableBufferPointer { ob in
+                oc_channel_strip_process(&strip, ib.baseAddress!, ob.baseAddress!, 1)
+            }
+        }
+        XCTAssertEqual(out[0], expected, accuracy: expected * 0.01)
+    }
 }

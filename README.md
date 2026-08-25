@@ -642,6 +642,12 @@ Measured on real hardware — two USB condenser microphones on Apple silicon —
 
 **CPU is well inside target.** Around 5 % for two live channels with all effects, meters running. The audio work itself is roughly 0.5 % — nearly all of the remainder is drawing the level meters, which is why they are AppKit rather than SwiftUI (a SwiftUI implementation cost 22 % of a core).
 
+**A muted channel costs about half of a live one.** Measured on one running instance, same window, same three microphones, switching only the mute buttons: 9.6–10.7 % with none muted, 4.7–5.9 % with all three muted, and back to 8.7–10.7 % on unmuting. A muted channel is summed in at a gain of exactly zero, so everything from the DSP chain to the sum is arithmetic whose result is discarded, and it is skipped.
+
+What is *not* skipped is the important part. The channel keeps draining its ring buffer and keeps its drift controller running, because the microphone carries on producing whether or not anyone is listening: a channel that stopped consuming would let its ring fill, wind the controller up against a saturated error, and hand you a backlog rather than the present when it came back. Over repeated mute/unmute cycles the dropout counter did not move and the clock corrections stayed at +3/+0/+0 ppm, which is what confirms this.
+
+The input meter also keeps running, because it is measured before pad, gain, fader and mute — a new device arrives muted, so a muted channel is exactly when you want to see whether it is picking anything up, and it is what the gain calibration reads. The output and gain-reduction meters are pushed to silence instead of simply being left, since a meter that is not called freezes at its last reading rather than falling. The skip only begins once the fader has finished its ramp to zero, so muting is still a ramp rather than a cut, and unmuting ramps back up from silence.
+
 **Test suites pass.** `make test` covers the DSP primitives offline against known signals; `make test-driver` exercises the plug-in's property dispatch and ring buffer.
 
 ### Known limitations

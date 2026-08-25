@@ -28,6 +28,7 @@ void oc_channel_strip_init(oc_channel_strip *strip, oc_sample_rate sr)
     oc_bass_enhancer_init(&strip->bass_enhancer, sr);
     oc_meter_init(&strip->input_meter, sr, 300.0f);
     oc_meter_init(&strip->output_meter, sr, 300.0f);
+    strip->muted = 0;
 }
 
 void oc_channel_strip_set_pad_db(oc_channel_strip *strip, oc_float db)
@@ -72,6 +73,7 @@ void oc_channel_strip_set_bypasses(
 
 void oc_channel_strip_process(oc_channel_strip *strip, const oc_float *in, oc_float *out, uint32_t n_frames)
 {
+    strip->muted = 0;
     oc_meter_process_block(&strip->input_meter, in, n_frames);
 
     int all_bypassed = strip->hpf_mode == OC_HPF_OFF
@@ -120,6 +122,44 @@ void oc_channel_strip_process(oc_channel_strip *strip, const oc_float *in, oc_fl
     oc_meter_process_block(&strip->output_meter, out, n_frames);
 }
 
+// A muted channel is summed into the mix at a gain of exactly zero, so every
+// stage after the input meter is arithmetic whose result is discarded. This
+// runs the parts that would otherwise start lying, and nothing else.
+//
+// What is deliberately still done elsewhere, and must stay that way: the caller
+// keeps draining this channel's ring buffer and keeps its drift controller
+// running. Muting is not a reason to stop consuming from a device that is still
+// producing -- the ring would fill, the controller would wind up against a
+// saturated error, and unmuting would hand you a backlog rather than the
+// present. That is the trap in "skip muted channels", and it is why this
+// function takes an input block at all.
+//
+// What is done here:
+//  - The input meter, because it is measured before pad, gain, fader and mute,
+//    and is what the level display and the gain calibration read. A device
+//    OpenConnct has never seen arrives muted, so this is exactly when someone
+//    wants to see whether it is picking anything up.
+//  - The pad and gain smoothers, advanced a block at a time rather than a
+//    sample at a time, so a gain changed during the mute is already in position
+//    when the channel comes back rather than sliding into place afterwards.
+//  - The output meter, decayed towards silence, because a meter that is simply
+//    not called freezes at its last reading and leaves it on screen.
+//
+// What is deliberately not done: the filters, the gate, the compressor, the
+// exciter and the bass enhancer keep whatever internal state they had. Resuming
+// with stale state would ordinarily risk a click, but the caller ramps the
+// fader up from zero across the first block after unmuting, which is precisely
+// where that discontinuity lands -- so it is attenuated by the ramp that is
+// already there for the mute itself.
+void oc_channel_strip_process_muted(oc_channel_strip *strip, const oc_float *in, uint32_t n_frames)
+{
+    strip->muted = 1;
+    oc_meter_process_block(&strip->input_meter, in, n_frames);
+    oc_smoothed_param_advance(&strip->pad_gain, n_frames);
+    oc_smoothed_param_advance(&strip->gain, n_frames);
+    oc_meter_process_silence(&strip->output_meter, n_frames);
+}
+
 oc_meter_values oc_channel_strip_input_meter(const oc_channel_strip *strip)
 {
     return oc_meter_read(&strip->input_meter);
@@ -133,14 +173,18 @@ oc_meter_values oc_channel_strip_output_meter(const oc_channel_strip *strip)
 // A bypassed stage reports no reduction. Without this the stage's last value
 // persists -- and an untouched gate initialises to -120 dB (fully closed) --
 // so a disabled gate would drive its meter to full deflection.
+//
+// A muted channel is the same problem arriving by a different route: the stage
+// is no longer being run, so its last value would sit frozen on the meter for
+// as long as the mute lasts.
 oc_float oc_channel_strip_gate_gr_db(const oc_channel_strip *strip)
 {
-    if (strip->bypass_gate) return 0.0f;
+    if (strip->bypass_gate || strip->muted) return 0.0f;
     return oc_gate_gain_reduction_db(&strip->gate);
 }
 
 oc_float oc_channel_strip_comp_gr_db(const oc_channel_strip *strip)
 {
-    if (strip->bypass_compressor) return 0.0f;
+    if (strip->bypass_compressor || strip->muted) return 0.0f;
     return oc_compressor_gain_reduction_db(&strip->compressor);
 }

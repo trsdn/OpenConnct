@@ -16,6 +16,11 @@ typedef struct oc_meter { oc_sample_rate sr; oc_float decay_coeff; oc_float peak
 void oc_meter_init(oc_meter *m, oc_sample_rate sr, oc_float decay_ms);
 void oc_meter_reset(oc_meter *m);
 void oc_meter_process_block(oc_meter *m, const oc_float *in, uint32_t n);
+/* Advance the decay by n frames of silence, without needing a buffer of zeroes.
+   For a signal path that is known to be producing nothing: a meter that is
+   simply not called freezes at its last value, which is how a stale reading
+   ends up on screen. */
+void oc_meter_process_silence(oc_meter *m, uint32_t n);
 oc_meter_values oc_meter_read(const oc_meter *m);
 #ifdef __cplusplus
 }

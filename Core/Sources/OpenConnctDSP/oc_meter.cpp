@@ -40,6 +40,19 @@ void oc_meter_process_block(oc_meter *meter, const oc_float *in, uint32_t n)
     meter->rms_sq = (1.0f - block_coeff) * block_mean_square + block_coeff * meter->rms_sq;
 }
 
+void oc_meter_process_silence(oc_meter *meter, uint32_t n)
+{
+    if (n == 0) {
+        return;
+    }
+
+    // The same arithmetic as process_block with an all-zero input: the block
+    // peak and mean square are both zero, so only the decay term survives.
+    oc_float block_coeff = powf(meter->decay_coeff, (oc_float)n);
+    meter->peak *= block_coeff;
+    meter->rms_sq *= block_coeff;
+}
+
 oc_meter_values oc_meter_read(const oc_meter *meter)
 {
     oc_meter_values values;

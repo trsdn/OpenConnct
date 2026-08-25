@@ -486,7 +486,26 @@ let ocOutputRenderCallback: AURenderCallback = {
             }
         }
 
-        // 2c. Full DSP chain, in bounded chunks.
+        // 2c. Muted, and the fader has already finished its ramp down to zero.
+        // Everything from here to the sum would be multiplied by exactly zero,
+        // so it is skipped -- but only after 2a and 2b, which must keep running:
+        // the device is still filling this ring whether or not anyone is
+        // listening to it, and a channel that stops draining its ring hands you
+        // a backlog instead of the present when it comes back.
+        //
+        // The ramp is what makes the test safe. targetGain reaches zero the
+        // moment mute is pressed, but faderGain only catches up at the end of
+        // that block, so the fast path starts one block later and the mute
+        // itself is still a ramp rather than a cut. Unmuting is symmetrical:
+        // faderGain is zero, so the first audible block ramps up from silence.
+        if channel.pointee.targetGain == 0 && channel.pointee.faderGain == 0 {
+            oc_channel_strip_process_muted(
+                channel.pointee.strip, channel.pointee.pulled, UInt32(frames))
+            oc_meter_process_silence(channel.pointee.postFaderMeter, UInt32(frames))
+            continue
+        }
+
+        // 2d. Full DSP chain, in bounded chunks.
         var offset = 0
         while offset < frames {
             let n = min(kDSPChunk, frames - offset)
@@ -498,7 +517,7 @@ let ocOutputRenderCallback: AURenderCallback = {
             offset += n
         }
 
-        // 2d. Fader, ramped across the block so moves never step, applied in
+        // 2e. Fader, ramped across the block so moves never step, applied in
         // place so the result can be metered before it is summed. This is the
         // only point at which the signal is exactly what this channel sends to
         // the mix — after gain, after the DSP chain, after the fader, and after
@@ -521,7 +540,7 @@ let ocOutputRenderCallback: AURenderCallback = {
         }
     }
 
-    // 2e. Meter the sum. Done before publishing so the number the user reads is
+    // 2f. Meter the sum. Done before publishing so the number the user reads is
     // the number the virtual device hands to Teams or Zoom, not an estimate.
     oc_meter_process_block(engine.pointee.masterMeter, mix, UInt32(frames))
 
