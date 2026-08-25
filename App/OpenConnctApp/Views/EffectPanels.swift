@@ -124,8 +124,37 @@ struct EffectSection: View {
     @ObservedObject var store: ParameterStore
     @Binding var selected: EffectKind?
 
+    /// Muted covers being silenced by someone else's solo too, because the
+    /// engine treats the two identically: both drive the fader to zero, and a
+    /// channel at zero has its whole chain skipped.
+    private var silenced: Bool { store.isEffectivelyMuted(settings) }
+
     var body: some View {
         CardSection {
+            VStack(alignment: .leading, spacing: 6) {
+                effectRow
+                    // Dimmed, not disabled. The buttons still work — changing a
+                    // setting on a muted channel is a normal thing to do while
+                    // it is out of the mix, and it is in place by the time it
+                    // comes back.
+                    .opacity(silenced ? 0.45 : 1)
+                notice
+            }
+        }
+    }
+
+    /// Fixed height whether or not the text is there. This pane is a sheet with
+    /// a set size, and a line that appears and disappears would shift every
+    /// control below it each time the channel is muted.
+    private var notice: some View {
+        Text(silenced ? "Muted — these are not running. Your settings are kept." : "")
+            .font(Theme.captionFont)
+            .foregroundColor(Theme.textSecondary)
+            .frame(height: 13, alignment: .leading)
+            .accessibilityHidden(!silenced)
+    }
+
+    private var effectRow: some View {
             HStack(alignment: .top, spacing: 4) {
                 ForEach(EffectKind.allCases) { kind in
                     EffectCircleButton(
@@ -150,7 +179,6 @@ struct EffectSection: View {
                     }
                 }
             }
-        }
     }
 
     /// A popover takes a boolean binding, but only one may be open at a time,

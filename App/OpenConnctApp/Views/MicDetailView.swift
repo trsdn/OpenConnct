@@ -354,12 +354,17 @@ struct MicDetailView: View {
                 .padding(14)
             }
         }
-        // Fixed, not content-driven. The height is measured against the tallest
-        // this pane gets — HPF on "Variable", which reveals the frequency row —
-        // so nothing resizes as you click around. The effect parameters live in
-        // popovers, so they cannot change it either. A sheet that grew and shrank
-        // under the pointer would be worse than a little slack at the bottom.
-        .frame(width: 520, height: 540)
+        // Fixed, not content-driven, so nothing resizes as you click around. The
+        // effect parameters live in popovers, so they cannot change it either.
+        //
+        // The height is measured against the real bottom of the content, which
+        // is not what it was before: 540 cut the lower half off the effect
+        // buttons, and did so even with the frequency row hidden. The row that
+        // was thought to be conditional is always laid out — it dims instead of
+        // disappearing — so there was no shorter case to size against, and the
+        // clipping was there from the start rather than being introduced by the
+        // muted notice underneath it.
+        .frame(width: 520, height: 620)
         .background(Theme.bg)
         .sheet(item: $calibration) { session in
             GainCalibrationView(session: session, settings: settings) {

@@ -648,6 +648,8 @@ What is *not* skipped is the important part. The channel keeps draining its ring
 
 The input meter also keeps running, because it is measured before pad, gain, fader and mute — a new device arrives muted, so a muted channel is exactly when you want to see whether it is picking anything up, and it is what the gain calibration reads. The output and gain-reduction meters are pushed to silence instead of simply being left, since a meter that is not called freezes at its last reading rather than falling. The skip only begins once the fader has finished its ramp to zero, so muting is still a ramp rather than a cut, and unmuting ramps back up from silence.
 
+On screen, a muted channel dims its four effect buttons and says so underneath: *Muted — these are not running. Your settings are kept.* The buttons still work — changing a setting on a channel that is out of the mix is a normal thing to do, and it is in place by the time it comes back. The line occupies its space whether or not it is showing, so muting does not shift the controls above it.
+
 **Test suites pass.** `make test` covers the DSP primitives offline against known signals; `make test-driver` exercises the plug-in's property dispatch and ring buffer.
 
 ### Known limitations
