@@ -86,6 +86,8 @@ final class MeterNSView: NSView {
     // whole pixel is discarded without touching the display.
     private var lastFillPx: CGFloat = -1
     private var lastPeakPx: CGFloat = -1
+    /// Whether the last `draw` put a hold mark on the track. See `refresh`.
+    private var lastShowsHold = false
 
     /// Ticks since the last full repaint. See `refresh(force:)`.
     private var ticksSinceFullRepaint = 0
@@ -169,9 +171,18 @@ final class MeterNSView: NSView {
 
         let fill: CGFloat
         let peak: CGFloat
+        /// Whether `draw` will put a mark on the track at all — see the guard
+        /// there. It has to be part of the comparison below, because the mark
+        /// vanishes at a level whose *pixel* position is 0, which is also the
+        /// position it had while it was still visible. Comparing pixels alone
+        /// therefore calls that transition "nothing moved" and the mark would
+        /// sit there until the next scheduled full repaint, up to a second
+        /// later. A stripe that goes away eventually is still a stripe.
+        let showsHold: Bool
         if isReductionMeter {
             fill = (reductionFraction(reductionDB) * length).rounded()
             peak = 0
+            showsHold = false
         } else {
             // The bar shows the peak, not the RMS.
             //
@@ -195,9 +206,13 @@ final class MeterNSView: NSView {
             let held  = muted ? Float(-120) : holdDB
             fill = (meterPosition(level) * length).rounded()
             peak = (meterPosition(held) * length).rounded()
+            showsHold = held > meterFloorDB
         }
 
-        let unchanged = !force && fill == lastFillPx && peak == lastPeakPx
+        let unchanged = !force
+            && fill == lastFillPx
+            && peak == lastPeakPx
+            && showsHold == lastShowsHold
         ticksSinceFullRepaint += 1
         let repairDue = ticksSinceFullRepaint >= Self.repaintInterval
         guard !unchanged || repairDue else { return }
@@ -234,24 +249,29 @@ final class MeterNSView: NSView {
         // second against twenty partial ones did not move the measured CPU at
         // all (5.4% before and after, three microphones live).
         //
-        // The wide bars now always repaint whole, because the span scheme rests
-        // on an assumption nothing verifies: that the layer still holds exactly
-        // what the last `draw` put there. Backing
-        // stores are not promised to survive a display reconfiguration, a scale
-        // change, or a move between screens, and where that assumption has
-        // failed it has failed visibly — a green stripe left standing in the
-        // master meter, reported three times.
+        // Bars that draw a scale always repaint whole, because the span scheme
+        // rests on an assumption nothing verifies: that the layer still holds
+        // exactly what the last `draw` put there. Backing stores are not
+        // promised to survive a display reconfiguration, a scale change, or a
+        // move between screens.
         //
-        // `showsScale` is set on exactly the bars where that has been seen: the
-        // one master bar, and the two IN/OUT bars in the detail sheet. Those are
-        // also the bars the optimisation was written for, so this gives back
-        // some of what it bought — but the guard above still returns early when
-        // nothing moved, so a quiet room stays free, and measured with three
-        // microphones live it did not move the figure (6.8–10.2% either way).
-        // A meter showing a level nobody is producing is the worse cost.
+        // That is every level meter in the app today — the strip meters, the
+        // master bar and the two IN/OUT bars in the detail sheet all set
+        // `showsScale`. So only the gain-reduction meters still take the
+        // partial path. This comment used to claim the strip meters kept the
+        // optimisation; they stopped when they gained a scale, and the claim
+        // was left behind.
         //
-        // The dense strip meters, which are many and small and have never shown
-        // this, keep the optimisation.
+        // Worth stating plainly, because it was misread once already: the green
+        // stripe reported against these meters was never a stale pixel. These
+        // bars repaint completely twenty times a second, so a leftover cannot
+        // survive a single tick. `draw` was putting the stripe there on purpose,
+        // every tick, and no amount of repainting could remove something that
+        // was being redrawn. See the guard in `draw`.
+        //
+        // The early return above still fires when nothing moved, so a quiet
+        // room costs nothing, and measured with three microphones live this did
+        // not move the figure (6.8–10.2% either way).
         if force || showsScale || lastFillPx < 0 || lastPeakPx < 0 || repairDue {
             needsDisplay = true
             ticksSinceFullRepaint = 0
@@ -264,6 +284,7 @@ final class MeterNSView: NSView {
         }
         lastFillPx = fill
         lastPeakPx = peak
+        lastShowsHold = showsHold
     }
 
     /// The rectangle covering everything between two fill distances, in view
@@ -361,6 +382,27 @@ final class MeterNSView: NSView {
                 colour: Theme.meterAmber, vertical: vertical, thickness: thickness)
         segment(ctx, from: redPos, to: barLen,
                 colour: Theme.meterRed, vertical: vertical, thickness: thickness)
+
+        // The mark answers "how loud was the loudest moment just now". At the
+        // floor there was no such moment, so there is nothing to mark.
+        //
+        // Drawing it anyway is what left a green stripe in every meter. The bar
+        // above disappears correctly at the floor, because its span collapses to
+        // zero length and `segment` declines to fill an empty rectangle. The
+        // mark does not: it carries its own 2pt thickness, so at position 0 it
+        // still fills 0…2 and leaves a green dash at the bottom of the track.
+        //
+        // In a quiet room that dash was the only lit pixel on an 8pt strip
+        // meter, which is exactly how it was read and reported — a stripe stuck
+        // in the bar. It survived muting the channel, because muting sets the
+        // held value to -120 and -120 clamps to the same position 0. It
+        // outlived the earlier repair pass because that pass went after the
+        // target band, which was a different green thing that did not move.
+        //
+        // A meter that prints "silent" beside itself while showing green in the
+        // picture is lying, and it does not stop being a lie because the green
+        // is only two points tall.
+        guard held > meterFloorDB else { return }
 
         let peakPos = meterPosition(held) * length
         let tickColour = held > meterRedDB ? Theme.meterRed

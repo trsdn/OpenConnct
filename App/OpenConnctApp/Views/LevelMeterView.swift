@@ -15,7 +15,11 @@ import SwiftUI
 // their pixel positions are computed by the same meterPosition() function so
 // the bands always match the tick marks.
 
-private let meterFloor: Float = -60
+/// The bottom of the meter's scale. Anything at or below this is "nothing",
+/// and the meter shows nothing for it — no bar, and no hold mark either.
+/// `meterVerdict` uses the same number, so the words and the picture agree
+/// about where silence begins.
+let meterFloorDB: Float = -60
 
 /// Maps a dBFS value in -60…0 to a 0…1 fraction using a quadratic curve.
 /// Exponent 2.0 places the -18 dBFS amber threshold at ~49 % and the -6 dBFS
@@ -23,8 +27,8 @@ private let meterFloor: Float = -60
 /// operating range. The curve is monotonic and returns exactly 0 at −60 dBFS
 /// and exactly 1 at 0 dBFS, with no NaN or out-of-range values at the extremes.
 func meterPosition(_ db: Float) -> CGFloat {
-    let clamped = max(meterFloor, min(0, db))
-    let linear = Double((clamped - meterFloor) / -meterFloor) // 0…1 linear
+    let clamped = max(meterFloorDB, min(0, db))
+    let linear = Double((clamped - meterFloorDB) / -meterFloorDB) // 0…1 linear
     return CGFloat(pow(linear, 2.0))                          // compress quiet floor, expand speech range
 }
 
@@ -83,7 +87,7 @@ enum MeterVerdict {
 }
 
 func meterVerdict(peakDB: Float) -> MeterVerdict {
-    if peakDB <= -60 { return .silent }
+    if peakDB <= meterFloorDB { return .silent }
     if peakDB < meterTargetLowDB { return .tooQuiet }
     if peakDB < meterTargetHighDB { return .good }
     if peakDB < meterRedDB { return .hot }
