@@ -511,11 +511,16 @@ final class ParameterStore: ObservableObject {
     /// at: run once at the default and once at 0 and the difference is what the
     /// meters cost. 0 disables metering entirely, leaving audio untouched.
     ///
-    /// The default is 20 rather than 30 because the cost is linear in the rate
-    /// — measured 2.2% at 5 Hz, 5.8% at 15 Hz, 12.5% at 30 Hz — while 20 Hz is
-    /// still fast enough that a peak-holding meter reads the same to the eye.
-    /// That is a trade, not a fix: the real cost is SwiftUI's per-update
-    /// overhead, and the audio engine underneath it measures 0.5%.
+    /// The cost used to be linear in the rate. Since the meters were rewritten
+    /// in AppKit and draw only the region that moved, it is strongly sublinear:
+    /// measured on three channels at 3.1% (off), 5.8% (5 Hz), 7.7% (20 Hz),
+    /// 8.9% (40 Hz). Going from 0 to 5 Hz costs 2.7 points; going from 20 to
+    /// 40 Hz costs 1.2 points for four times as many ticks, because at a higher
+    /// rate each tick moves the bar by fewer whole pixels and the "nothing
+    /// moved" early-out absorbs most of them.
+    ///
+    /// 20 Hz is kept because it is fast enough that a peak-holding meter reads
+    /// the same to the eye, and the marginal cost above it is small.
     static let meterHz: Double = {
         guard let raw = ProcessInfo.processInfo.environment["OPENCONNCT_METER_HZ"],
               let hz = Double(raw), hz >= 0 else { return 20 }

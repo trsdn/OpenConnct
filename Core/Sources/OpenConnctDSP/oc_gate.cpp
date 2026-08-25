@@ -25,20 +25,24 @@ void oc_gate_detector_reset(oc_gate_detector *det)
 /* High-passed, rectified, envelope-followed. Driving a gate from the raw sample
    magnitude instead made a single noise peak reopen it, and made |x| collapse at
    every zero crossing. */
-oc_float oc_gate_detector_process_sample(oc_gate_detector *det, oc_float x)
+oc_float oc_gate_detector_process_sample_linear(oc_gate_detector *det, oc_float x)
 {
     oc_float key = oc_biquad_process_sample(&det->key_hp, x);
     oc_float rectified = fabsf(key);
     oc_float coeff = rectified > det->env ? det->attack_coeff : det->release_coeff;
     det->env = oc_slew(det->env, rectified, coeff);
-    return oc_linear_to_db(det->env);
+    return det->env;
+}
+
+oc_float oc_gate_detector_process_sample(oc_gate_detector *det, oc_float x)
+{
+    return oc_linear_to_db(oc_gate_detector_process_sample_linear(det, x));
 }
 
 void oc_gate_init(oc_gate *gate, oc_sample_rate sr)
 {
     gate->sr = sr;
     gate->gain = 0.0f;
-    gate->gain_reduction_db = -120.0f;
     gate->state = OC_GATE_CLOSED;
     oc_gate_detector_init(&gate->det, sr);
     oc_gate_configure(gate, -50.0f, 5.0f, 20.0f, 80.0f, 3.0f, -120.0f);
@@ -55,6 +59,8 @@ void oc_gate_configure(
 {
     gate->threshold_db = threshold_db;
     gate->close_threshold_db = threshold_db - fabsf(hysteresis_db);
+    gate->threshold_lin = oc_db_to_linear(gate->threshold_db);
+    gate->close_threshold_lin = oc_db_to_linear(gate->close_threshold_db);
     gate->attack_ms = attack_ms;
     gate->hold_ms = hold_ms;
     gate->release_ms = release_ms;
@@ -72,18 +78,22 @@ void oc_gate_configure(
     }
 }
 
+/* The state machine works on the linear envelope against linearised
+   thresholds. A logarithm is monotone, so every comparison below decides
+   exactly as it did in decibels -- it is the same gate, without one log per
+   sample. */
 oc_float oc_gate_process_sample(oc_gate *gate, oc_float input)
 {
-    oc_float input_db = oc_gate_detector_process_sample(&gate->det, input);
+    oc_float env = oc_gate_detector_process_sample_linear(&gate->det, input);
 
     switch (gate->state) {
     case OC_GATE_CLOSED:
-        if (input_db >= gate->threshold_db) {
+        if (env >= gate->threshold_lin) {
             gate->state = OC_GATE_ATTACKING;
         }
         break;
     case OC_GATE_ATTACKING:
-        if (input_db < gate->close_threshold_db) {
+        if (env < gate->close_threshold_lin) {
             gate->state = OC_GATE_RELEASING;
         } else if (gate->gain > 0.99f) {
             gate->gain = 1.0f;
@@ -91,13 +101,13 @@ oc_float oc_gate_process_sample(oc_gate *gate, oc_float input)
         }
         break;
     case OC_GATE_OPEN:
-        if (input_db < gate->close_threshold_db) {
+        if (env < gate->close_threshold_lin) {
             gate->state = OC_GATE_HOLDING;
             gate->hold_remaining = gate->hold_samples;
         }
         break;
     case OC_GATE_HOLDING:
-        if (input_db >= gate->threshold_db) {
+        if (env >= gate->threshold_lin) {
             gate->state = OC_GATE_OPEN;
         } else if (gate->hold_remaining > 0) {
             --gate->hold_remaining;
@@ -106,7 +116,7 @@ oc_float oc_gate_process_sample(oc_gate *gate, oc_float input)
         }
         break;
     case OC_GATE_RELEASING:
-        if (input_db >= gate->threshold_db) {
+        if (env >= gate->threshold_lin) {
             gate->state = OC_GATE_ATTACKING;
         } else if (gate->gain <= gate->range_gain + 1.0e-6f) {
             gate->gain = gate->range_gain;
@@ -132,7 +142,6 @@ oc_float oc_gate_process_sample(oc_gate *gate, oc_float input)
         gate->gain = gate->range_gain;
     }
 
-    gate->gain_reduction_db = oc_linear_to_db(fmaxf(gate->gain, 1.0e-6f));
     return input * gate->gain;
 }
 
@@ -143,9 +152,12 @@ void oc_gate_process_block(oc_gate *gate, const oc_float *in, oc_float *out, uin
     }
 }
 
+/* Derived on read rather than stored per sample. A meter is looked at twenty
+   times a second; computing it forty-eight thousand times a second and keeping
+   only the last one is the same answer at 2400 times the cost. */
 oc_float oc_gate_gain_reduction_db(const oc_gate *gate)
 {
-    return gate->gain_reduction_db;
+    return oc_linear_to_db(fmaxf(gate->gain, 1.0e-6f));
 }
 
 oc_float oc_gate_detector_db(const oc_gate *gate)

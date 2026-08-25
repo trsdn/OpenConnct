@@ -38,13 +38,21 @@ void oc_gate_detector_init(oc_gate_detector *d, oc_sample_rate sr);
 void oc_gate_detector_reset(oc_gate_detector *d);
 /* Returns the envelope in dBFS, which is the number the gate compares. */
 oc_float oc_gate_detector_process_sample(oc_gate_detector *d, oc_float x);
+/* Same envelope, still linear. The gate itself uses this and compares against
+   thresholds converted once in configure, because a logarithm per sample buys
+   nothing when the only use of the result is a monotone comparison. Callers
+   that have to *report* a level -- the room measurement -- want the dB form. */
+oc_float oc_gate_detector_process_sample_linear(oc_gate_detector *d, oc_float x);
 
 typedef struct oc_gate {
     oc_sample_rate sr;
     oc_float threshold_db, close_threshold_db;
+    /* The same two thresholds as linear envelope values. The gate compares
+       against these, so its per-sample path holds no logarithm. */
+    oc_float threshold_lin, close_threshold_lin;
     oc_float attack_ms, hold_ms, release_ms;
     oc_float range_db, range_gain;
-    oc_float gain, gain_reduction_db;
+    oc_float gain;
     oc_gate_state state;
     uint32_t hold_remaining, hold_samples;
     oc_float attack_coeff, release_coeff;

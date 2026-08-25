@@ -19,6 +19,11 @@ typedef struct oc_compressor {
     oc_detector_mode detector;
     oc_float env, rms_sq, gain, gain_reduction_db;
     oc_float attack_coeff, release_coeff;
+    /* Level below which the curve is flat, as a linear envelope value, plus the
+       gain that applies there. Speech spends most of its samples under the knee
+       and the answer there is a constant, so the pair lets the hot path skip a
+       logarithm and an exponential without changing that answer. */
+    oc_float below_knee_lin, below_knee_gain;
 } oc_compressor;
 
 void oc_compressor_init(oc_compressor *c, oc_sample_rate sr);

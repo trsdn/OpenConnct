@@ -30,6 +30,10 @@ typedef struct oc_bass_enhancer {
     oc_biquad lp_in, lp_out;
     oc_float env, attack_coeff, release_coeff;
     oc_float threshold_db, ratio;
+    /* The threshold as a linear envelope value. Below it the stage passes the
+       band at unity, so the hot path can take that answer directly instead of
+       going through decibels to arrive at the same one. */
+    oc_float threshold_lin;
     oc_float gain_reduction_db;
 } oc_bass_enhancer;
 

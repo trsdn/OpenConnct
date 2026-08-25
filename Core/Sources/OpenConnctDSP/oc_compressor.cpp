@@ -36,6 +36,8 @@ void oc_compressor_configure(
     compressor->detector = detector;
     compressor->attack_coeff = oc_coeff_for_ms(compressor->sr, attack_ms);
     compressor->release_coeff = oc_coeff_for_ms(compressor->sr, release_ms);
+    compressor->below_knee_lin = oc_db_to_linear(threshold_db - compressor->knee_db * 0.5f);
+    compressor->below_knee_gain = oc_db_to_linear(compressor->makeup_db);
 }
 
 oc_float oc_compressor_gain_db_for_level(const oc_compressor *compressor, oc_float input_db)
@@ -66,6 +68,16 @@ oc_float oc_compressor_process_sample(oc_compressor *compressor, oc_float input)
         oc_float coeff = level > compressor->env ? compressor->attack_coeff : compressor->release_coeff;
         compressor->env = oc_slew(compressor->env, level, coeff);
         level = compressor->env;
+    }
+
+    /* Under the knee the curve is flat: the answer is makeup gain and no
+       reduction. Taking it directly is the same number the general path below
+       would produce, arrived at without a logarithm or an exponential -- which
+       matters because in speech this is the common case, not the rare one. */
+    if (level <= compressor->below_knee_lin) {
+        compressor->gain = compressor->below_knee_gain;
+        compressor->gain_reduction_db = 0.0f;
+        return input * compressor->gain;
     }
 
     oc_float gain_db = oc_compressor_gain_db_for_level(compressor, oc_linear_to_db(level));

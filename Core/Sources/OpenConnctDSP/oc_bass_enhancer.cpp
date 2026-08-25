@@ -36,6 +36,7 @@ void oc_bass_enhancer_configure(oc_bass_enhancer *bottom, oc_float amount, oc_fl
        band is held back and the low-level lift becomes more pronounced. */
     bottom->threshold_db = -12.0f - 24.0f * bottom->drive;
     bottom->ratio = 2.0f + 6.0f * bottom->drive;
+    bottom->threshold_lin = oc_db_to_linear(bottom->threshold_db);
 }
 
 oc_float oc_bass_enhancer_process_sample(oc_bass_enhancer *bottom, oc_float input)
@@ -51,13 +52,22 @@ oc_float oc_bass_enhancer_process_sample(oc_bass_enhancer *bottom, oc_float inpu
     oc_float coeff = rectified > bottom->env ? bottom->attack_coeff : bottom->release_coeff;
     bottom->env = oc_slew(bottom->env, rectified, coeff);
 
-    oc_float level_db = oc_linear_to_db(bottom->env);
-    oc_float over_db = level_db - bottom->threshold_db;
-    oc_float gain_db = over_db > 0.0f ? over_db * (1.0f / bottom->ratio - 1.0f) : 0.0f;
+    /* Below the threshold the band passes untouched. That is the usual case --
+       the envelope here is of a low-passed signal -- and taking it directly
+       avoids a logarithm and an exponential that would together compute a gain
+       of exactly one. */
+    oc_float band_in = low;
 
-    bottom->gain_reduction_db = gain_db;
+    if (bottom->env > bottom->threshold_lin) {
+        oc_float over_db = oc_linear_to_db(bottom->env) - bottom->threshold_db;
+        oc_float gain_db = over_db * (1.0f / bottom->ratio - 1.0f);
+        bottom->gain_reduction_db = gain_db;
+        band_in = low * oc_db_to_linear(gain_db);
+    } else {
+        bottom->gain_reduction_db = 0.0f;
+    }
 
-    oc_float band = oc_biquad_process_sample(&bottom->lp_out, low * oc_db_to_linear(gain_db));
+    oc_float band = oc_biquad_process_sample(&bottom->lp_out, band_in);
 
     return input + bottom->amount * band;
 }
