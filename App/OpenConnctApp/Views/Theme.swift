@@ -38,6 +38,10 @@ enum Theme {
     static let valueFont  = Font.system(size: 11, weight: .semibold, design: .monospaced)
     static let captionFont = Font.system(size: 10, weight: .regular)
     static let titleFont  = Font.system(size: 12, weight: .semibold)
+    /// Glyph size for the small square toggles in a channel strip. A shade
+    /// heavier than `labelFont` because a symbol has no baseline or x-height to
+    /// help it read at 11 pt — it has to carry itself on stroke weight alone.
+    static let buttonIconFont = Font.system(size: 11, weight: .semibold)
 }
 
 // MARK: - Stable numeric readout

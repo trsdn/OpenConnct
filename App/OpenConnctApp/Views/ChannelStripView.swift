@@ -148,8 +148,8 @@ private struct MuteButton: View {
 
     var body: some View {
         Button(action: action) {
-            Text("M")
-                .font(Theme.labelFont)
+            Image(systemName: symbol)
+                .font(Theme.buttonIconFont)
                 .foregroundColor(fgColor)
                 .frame(width: 26, height: 22)
                 .background(RoundedRectangle(cornerRadius: Theme.radiusSmall).fill(bgColor))
@@ -161,14 +161,36 @@ private struct MuteButton: View {
         .accessibilityAddTraits(muted ? .isSelected : [])
     }
 
+    /// The picture states the outcome, so the button is legible without the
+    /// colour: a struck-through speaker when this channel is not heard, a
+    /// sounding one when it is. Colour then adds the second question — *who*
+    /// silenced it — which a shape cannot express.
+    ///
+    /// It is a speaker rather than a microphone on purpose. This same strip
+    /// already uses `mic.fill`/`mic.slash.fill` a few points higher to mean
+    /// connected/disconnected, and one picture meaning two different things in
+    /// one window is worse than the letter it replaced. The speaker also states
+    /// the truth more precisely: mute does not switch the microphone off, it
+    /// takes the channel out of what everyone hears.
+    private var symbol: String {
+        muted || effectivelyMuted ? "speaker.slash.fill" : "speaker.wave.2.fill"
+    }
+
     /// Says why, not just what. "Unmute" on a channel the user never muted
-    /// answers the wrong question.
+    /// answers the wrong question. With the letter gone the tooltip is also
+    /// where the word "mute" itself now lives, so it spells out the effect
+    /// rather than naming the feature.
     private var helpText: String {
         if automatic {
             return "New device — muted on arrival so it could not join the mix "
                 + "unheard. Click to unmute."
         }
-        return muted ? "Unmute" : "Mute"
+        if muted { return "Muted — click to let this microphone be heard again." }
+        if effectivelyMuted {
+            return "Already silent because another microphone is soloed. "
+                + "Click to mute this one as well."
+        }
+        return "Mute — silence this microphone. The others keep playing."
     }
 
     private var accessibilityValue: String {
@@ -186,8 +208,8 @@ private struct SoloButton: View {
 
     var body: some View {
         Button(action: action) {
-            Text("S")
-                .font(Theme.labelFont)
+            Image(systemName: "headphones")
+                .font(Theme.buttonIconFont)
                 .foregroundColor(soloed ? .black : Theme.textSecondary)
                 .frame(width: 26, height: 22)
                 .background(
@@ -196,10 +218,23 @@ private struct SoloButton: View {
                 )
         }
         .buttonStyle(.plain)
-        .help(soloed ? "Un-solo" : "Solo")
+        .help(helpText)
         .accessibilityLabel(Text("Solo"))
         .accessibilityValue(Text(soloed ? "On" : "Off"))
         .accessibilityAddTraits(soloed ? .isSelected : [])
+    }
+
+    /// Unlike mute, the glyph does not change with the state, and that is not an
+    /// oversight. Mute has two states that both need naming — heard, not heard —
+    /// whereas solo has a mode and a normal, and a lit button is the ordinary way
+    /// to show a mode is on. More to the point, switching solo on visibly changes
+    /// *every other strip* in the mixer: they all take the dimmed silenced
+    /// treatment and their speakers strike through. The state is announced across
+    /// the whole window, so this one button does not have to carry it alone.
+    private var helpText: String {
+        soloed
+            ? "Solo is on — click to hear the other microphones again."
+            : "Solo — hear only this microphone and silence all the others."
     }
 }
 
