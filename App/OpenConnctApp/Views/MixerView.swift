@@ -94,11 +94,17 @@ struct MixerView: View {
 
     @ViewBuilder
     private var stripArea: some View {
+        // Computed once for the whole row, because whether a word is worth
+        // showing depends on what the other strips say — a manufacturer name
+        // tells two channels apart only when just one of them carries it.
+        let labels = ChannelLabels.shorten(store.channels.map(\.deviceName))
+
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(alignment: .top, spacing: 8) {
-                ForEach(store.channels) { ch in
+                ForEach(Array(store.channels.enumerated()), id: \.element.id) { index, ch in
                     ChannelStripView(
                         settings: ch,
+                        label: labels[index],
                         connection: store.meterHub.connection(for: ch.deviceUID),
                         meterSource: store.meterHub.meterSource(for: ch.deviceUID),
                         store: store,

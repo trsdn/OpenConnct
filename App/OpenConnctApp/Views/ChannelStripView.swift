@@ -283,6 +283,9 @@ private struct RemoveChannelButton: View {
 
 struct ChannelStripView: View {
     let settings: ChannelSettings
+    /// The name as shortened for this row — see `ChannelLabels.shorten`. Not
+    /// derived here, because it depends on what the neighbouring strips say.
+    let label: String
     let connection: ChannelConnectionSource
     @ObservedObject var meterSource: ChannelMeterSource
     @ObservedObject var store: ParameterStore
@@ -300,13 +303,39 @@ struct ChannelStripView: View {
             // overlay on the tile below, not a sibling here. Sharing the row
             // with it cost 18 of 64 points and turned every name into an
             // ellipsis.
-            Text(settings.deviceName)
+            //
+            // 64 points is about nine characters and device names run to twenty,
+            // so three things buy the difference, none of which widens the strip:
+            //
+            // `label` has already had the words it shares with other strips
+            // removed — a manufacturer repeated on every strip spends five of the
+            // nine characters and distinguishes nothing.
+            //
+            // Two lines cost 16 points of height and roughly double what fits.
+            // 32 rather than 28, because two lines of a 12 pt semibold face need
+            // just over 30 and SwiftUI silently falls back to one line rather
+            // than overflow a frame it was given. Height is the axis with room
+            // to spare here; width is the one that does not.
+            //
+            // What is left truncates from the *head*, because the tail is where
+            // the model is. `.middle` kept the first characters, and the first
+            // characters are the least informative part of a device name.
+            //
+            // The full name is a hover away, and the detail sheet shows it in
+            // full, so nothing is actually hidden.
+            Text(label)
                 .font(Theme.titleFont)
                 .foregroundColor(isSelected ? Theme.accent : Theme.textPrimary)
-                .lineLimit(1)
-                .truncationMode(.middle)
+                .lineLimit(2)
+                .truncationMode(.head)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity)
-                .frame(height: 16)
+                .frame(height: 32)
+                .help(settings.deviceName)
+                // Shortening is a concession to 64 points of width. A screen
+                // reader has no such limit, so it gets the whole name.
+                .accessibilityLabel(settings.deviceName)
 
             ZStack(alignment: .topTrailing) {
                 MicTileButton(
