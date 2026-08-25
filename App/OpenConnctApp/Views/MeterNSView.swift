@@ -191,7 +191,26 @@ final class MeterNSView: NSView {
         // visible, because nothing else on the bar is lit. One full repaint per
         // second against twenty partial ones did not move the measured CPU at
         // all (5.4% before and after, three microphones live).
-        if force || lastFillPx < 0 || lastPeakPx < 0 || repairDue {
+        //
+        // The wide bars now always repaint whole, because the span scheme rests
+        // on an assumption nothing verifies: that the layer still holds exactly
+        // what the last `draw` put there. Backing
+        // stores are not promised to survive a display reconfiguration, a scale
+        // change, or a move between screens, and where that assumption has
+        // failed it has failed visibly — a green stripe left standing in the
+        // master meter, reported three times.
+        //
+        // `showsScale` is set on exactly the bars where that has been seen: the
+        // one master bar, and the two IN/OUT bars in the detail sheet. Those are
+        // also the bars the optimisation was written for, so this gives back
+        // some of what it bought — but the guard above still returns early when
+        // nothing moved, so a quiet room stays free, and measured with three
+        // microphones live it did not move the figure (6.8–10.2% either way).
+        // A meter showing a level nobody is producing is the worse cost.
+        //
+        // The dense strip meters, which are many and small and have never shown
+        // this, keep the optimisation.
+        if force || showsScale || lastFillPx < 0 || lastPeakPx < 0 || repairDue {
             needsDisplay = true
             ticksSinceFullRepaint = 0
         } else {
@@ -226,6 +245,21 @@ final class MeterNSView: NSView {
     override func setFrameSize(_ newSize: NSSize) {
         super.setFrameSize(newSize)
         // Pixel positions were computed against the old size.
+        invalidateEverything()
+    }
+
+    /// The backing store changed underneath us — a different screen, a different
+    /// scale, a resolution change.
+    ///
+    /// Whatever the layer held before this is not something to build on, and a
+    /// partial repaint would build on it. Cheap to be wrong about and expensive
+    /// not to be.
+    override func viewDidChangeBackingProperties() {
+        super.viewDidChangeBackingProperties()
+        invalidateEverything()
+    }
+
+    private func invalidateEverything() {
         lastFillPx = -1
         lastPeakPx = -1
         ticksSinceFullRepaint = 0
