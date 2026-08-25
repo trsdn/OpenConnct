@@ -677,7 +677,9 @@ Measured on real hardware — two USB condenser microphones on Apple silicon —
 
 **Hot-plug survives a real cable pull.** A microphone was physically unplugged and replugged while running: no crash, no restart, the channel strip returned by itself with its settings intact, the dropout counter advanced by 2 on reconnect and then stopped, and the clock correction settled back to zero within about a minute.
 
-**CPU is well inside target.** Around 5 % for two live channels with all effects, meters running. The audio work itself is roughly 0.5 % — nearly all of the remainder is drawing the level meters, which is why they are AppKit rather than SwiftUI (a SwiftUI implementation cost 22 % of a core).
+**CPU is well inside target.** Around 7 % of one core for three live channels with all effects and meters running; about 2 % of that is the audio work and the rest is drawing the level meters, which is why they are AppKit rather than SwiftUI (a SwiftUI implementation cost 22 % of a core). Muted channels skip the whole chain, so the figure tracks the number of channels actually in the mix rather than the number bound.
+
+Both halves have been measured by ablation rather than estimated. Set `OPENCONNCT_METER_HZ=0` to disable metering and see the audio cost on its own; the meter cost is sublinear in the rate (measured on three channels: 3.1 % off, 5.8 % at 5 Hz, 7.7 % at 20 Hz, 8.9 % at 40 Hz) because a meter only redraws the region that moved.
 
 **A muted channel costs about half of a live one.** Measured on one running instance, same window, same three microphones, switching only the mute buttons: 9.6–10.7 % with none muted, 4.7–5.9 % with all three muted, and back to 8.7–10.7 % on unmuting. A muted channel is summed in at a gain of exactly zero, so everything from the DSP chain to the sum is arithmetic whose result is discarded, and it is skipped.
 
