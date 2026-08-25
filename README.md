@@ -183,6 +183,50 @@ track, the bar at 28 %, and a target band the bar could not reach at any safe
 level. Following the picture — pushing the solid bar into the band — meant peaks
 around −6 dBFS, right at the edge of clipping. One quantity, one scale.
 
+### Setting the level for you
+
+A meter tells you the level is wrong. It does not tell you by how much. The
+answer needs a number, and *Set the level for me…* in a microphone's settings
+measures one: two seconds of the room, then five seconds of you reading a fixed
+sentence, and then a gain that puts your voice at **−12 dBFS**, the middle of
+the band the meter draws.
+
+The sentence is fixed on purpose. Crest factor varies by more than 6 dB with
+what is being said — plosives make the peaks — so measuring an arbitrary
+utterance calibrates for that utterance and then clips on the first hard
+consonant of the real call. The one it asks for, *"Please pick up the box and
+put it back on the top shelf."*, is stuffed with them.
+
+Three details that are less obvious than they look:
+
+- **The room is measured at its middle, your voice at its top.** Both readings
+  come from a peak meter, so a high percentile of two seconds of "silence"
+  reports the single loudest transient in it. In this room that was one keyboard
+  tap, at −10.9 dBFS against −33.9 dBFS of actual room: a 23 dB gap, entirely
+  furniture. Against a floor like that, ordinary speech fails to clear the bar
+  and the calibration refuses. The room wants its typical level; your voice
+  wants its loud parts. Different questions, different statistics.
+- **"Did anyone speak" is not "was there a loud moment".** A door closing passes
+  the second test. What separates a sentence from a room is that speech *stays*
+  loud — it fills most of the window, a tap fills a fraction of it — so the test
+  compares a level the voice had to hold against the room, not a level it merely
+  touched. Five silent seconds still produced 7 dB of peak-over-room here, which
+  was enough to propose a gain for an empty chair before this was fixed.
+- **It measures before the fader and before mute.** So it works on a channel
+  that is muted, which is exactly the state a new device arrives in — and
+  therefore exactly when you want to calibrate it. The consequence is that the
+  figures it reports are pre-fader while the mixer's meter is post-fader; if
+  your fader is far from 0 dB it says so, so that a correct calibration followed
+  by an unchanged strip meter does not read as a broken feature.
+
+It refuses rather than guessing in four cases: nothing stood out from the room;
+the microphone's own converter is already clipping, which no gain setting here
+can undo; the level is over the band even at minimum gain, which wants the pad;
+and the level is under the band even at maximum, which wants you closer to the
+microphone. When it can answer, it says the numbers it measured and what they
+will become, and nothing changes until you press the button that names the new
+gain.
+
 ### New devices arrive muted
 
 A device OpenConnct has never seen before starts **muted**, and its mute button

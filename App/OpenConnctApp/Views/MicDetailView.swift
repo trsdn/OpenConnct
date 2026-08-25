@@ -32,6 +32,7 @@ private struct GainStepButton: View {
 private struct GainBlock: View {
     let settings: ChannelSettings
     @ObservedObject var store: ParameterStore
+    let onCalibrate: () -> Void
 
     private let stepDB: Float = 1.0
 
@@ -39,10 +40,10 @@ private struct GainBlock: View {
     /// now covers that preamp as well as the DSP trim, so the ceiling has to
     /// leave room above what the device alone can reach — otherwise adopting a
     /// device already near its maximum would land outside the slider.
-    private var gainRange: ClosedRange<Float> {
-        guard let hw = store.hardwareGainRanges[settings.deviceUID] else { return -20...40 }
-        return -20...max(40, hw.maxDB + 10)
-    }
+    ///
+    /// Defined on the store so the guided calibration clamps to exactly the
+    /// same range; two copies would eventually disagree.
+    private var gainRange: ClosedRange<Float> { store.gainRange(for: settings.deviceUID) }
 
     private var processing: ChannelProcessingMap {
         ChannelProcessingMap.resolve(
@@ -105,6 +106,17 @@ private struct GainBlock: View {
             .frame(maxWidth: 320)
             .accessibilityLabel(Text("Gain"))
             .accessibilityValue(Text(formatDB(settings.gainDB, decimals: 1)))
+
+            HStack(spacing: 10) {
+                // The one thing a level meter cannot do is say *how much*. This
+                // measures instead of reporting, so it belongs next to the
+                // control it sets rather than in a menu somewhere.
+                Button("Set the level for me\u{2026}", action: onCalibrate)
+                    .buttonStyle(.bordered)
+                    .help("Measures the room and then your voice, and proposes a gain.")
+                Spacer(minLength: 0)
+            }
+            .frame(maxWidth: 320)
 
             hardwareGainNote
         }
@@ -303,6 +315,7 @@ struct MicDetailView: View {
     let onClose: () -> Void
 
     @State private var selectedEffect: EffectKind?
+    @State private var calibration: GainCalibrationSession?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -317,7 +330,10 @@ struct MicDetailView: View {
 
                     CardSection {
                         VStack(spacing: 10) {
-                            GainBlock(settings: settings, store: store)
+                            GainBlock(settings: settings, store: store) {
+                                calibration = GainCalibrationSession(
+                                    deviceUID: settings.deviceUID, store: store)
+                            }
                             Divider().background(Theme.border)
                             PadRow(settings: settings, store: store)
                             Divider().background(Theme.border)
@@ -345,6 +361,11 @@ struct MicDetailView: View {
         // under the pointer would be worse than a little slack at the bottom.
         .frame(width: 520, height: 540)
         .background(Theme.bg)
+        .sheet(item: $calibration) { session in
+            GainCalibrationView(session: session, settings: settings) {
+                calibration = nil
+            }
+        }
     }
 
     private var header: some View {

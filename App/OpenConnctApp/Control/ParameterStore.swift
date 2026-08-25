@@ -273,8 +273,51 @@ final class ParameterStore: ObservableObject {
         ).softwareDB
     }
 
-    /// Sends the DSP half of the gain and, when allowed, asks the device for its
-    /// half. Never blocks: the request is queued and coalesced, and the result
+    /// The usable total gain for a channel.
+    ///
+    /// With a microphone that has its own preamp the number covers that preamp
+    /// as well as the DSP trim, so the ceiling has to leave room above what the
+    /// device alone can reach — otherwise adopting a device already near its
+    /// maximum would land outside the slider. Defined here rather than in the
+    /// view because the guided calibration has to clamp to exactly the same
+    /// range, and two copies of it would eventually disagree.
+    func gainRange(for uid: String) -> ClosedRange<Float> {
+        guard let hw = hardwareGainRanges[uid] else { return -20...40 }
+        return -20...max(40, hw.maxDB + 10)
+    }
+
+    /// One reading for the guided gain calibration.
+    struct CalibrationSample {
+        /// The signal as the device delivered it, before our gain and pad. Only
+        /// used to tell an overloaded microphone apart from our own gain being
+        /// too high.
+        var rawPeakDB: Float
+        /// After gain and pad, before the effects and the fader. This is the
+        /// tap the meter's target band actually describes, and it is the only
+        /// one where the arithmetic is linear in the gain — the tap after the
+        /// effects has a compressor in it, and the tap after the fader would
+        /// demand +60 dB of gain to compensate for a fader pulled down.
+        ///
+        /// Being before the fader also means the measurement works on a muted
+        /// channel, which matters: a device the app has never seen arrives
+        /// muted, and that is exactly the moment to calibrate it.
+        var postGainPeakDB: Float
+        var gainDB: Float
+    }
+
+    func calibrationSample(for uid: String) -> CalibrationSample? {
+        guard let index = channels.firstIndex(where: { $0.deviceUID == uid }) else { return nil }
+        let settings = channels[index]
+        let m = meterSnapshot(for: uid)
+        guard m.connected else { return nil }
+        let pad = settings.padEnabled ? settings.padDB : 0
+        return CalibrationSample(
+            rawPeakDB: m.inputPeakDB,
+            postGainPeakDB: m.inputPeakDB + pad + softwareGainDB(for: settings),
+            gainDB: settings.gainDB)
+    }
+
+    /// Sends the DSP half of the gain and, when allowed, asks the device for its    /// half. Never blocks: the request is queued and coalesced, and the result
     /// arrives through `hardwareGainDidChange`.
     private func applyGain(channel: Int, settings: ChannelSettings) {
         send(.gainDB, channel: channel, softwareGainDB(for: settings))
