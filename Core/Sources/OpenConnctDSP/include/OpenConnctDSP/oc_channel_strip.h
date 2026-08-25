@@ -17,6 +17,11 @@
 extern "C" {
 #endif
 
+/* Below this the difference is meaningless and the reading is just the log of a
+   denormal, so the probe's running maximum starts here rather than at minus
+   infinity. */
+#define OC_NOISE_PROBE_FLOOR_DB -120.0f
+
 typedef enum oc_hpf_mode { OC_HPF_OFF=0, OC_HPF_75=1, OC_HPF_150=2, OC_HPF_CONTINUOUS=3 } oc_hpf_mode;
 
 typedef struct oc_channel_strip {
@@ -34,6 +39,14 @@ typedef struct oc_channel_strip {
     /* Set by whichever process function ran last. Only the gain-reduction
        readers consult it; see the note on them in the .cpp. */
     int muted;
+    /* Noise-floor probe. A second copy of the gate's side-chain, fed the same
+       sample the gate is fed, running only while someone is measuring. It is
+       not the gate's own detector because the gate is usually switched off at
+       the moment a threshold is being chosen for it, and a switched-off gate
+       detects nothing. */
+    oc_gate_detector noise_probe;
+    int noise_probe_armed;
+    oc_float noise_probe_max_db;
 } oc_channel_strip;
 
 void oc_channel_strip_init(oc_channel_strip *s, oc_sample_rate sr);
@@ -50,6 +63,14 @@ oc_meter_values oc_channel_strip_input_meter(const oc_channel_strip *s);
 oc_meter_values oc_channel_strip_output_meter(const oc_channel_strip *s);
 oc_float oc_channel_strip_gate_gr_db(const oc_channel_strip *s);
 oc_float oc_channel_strip_comp_gr_db(const oc_channel_strip *s);
+/* Measure the room in the frame the gate threshold is expressed in.
+   Arming resets the detector and the running maximum. */
+void oc_channel_strip_arm_noise_probe(oc_channel_strip *s, int armed);
+/* Loudest the probe's envelope reached since the last call, then starts again.
+   Reading the envelope instantaneously instead would under-report: it falls by
+   25 ms per time constant, so a poll every 50 ms would keep missing what the
+   gate would have opened on. */
+oc_float oc_channel_strip_read_noise_probe_db(oc_channel_strip *s);
 #ifdef __cplusplus
 }
 #endif

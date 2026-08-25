@@ -270,11 +270,13 @@ struct EffectParameters: View {
     @ViewBuilder private var gate: some View {
         LiveGRStrip(source: meterSource, stage: .gate)
 
+        NoiseFloorRow(settings: settings, store: store)
+
         ParamSliderRow(
             "Threshold",
             value: bind(settings.gate.thresholdDB, uid: uid, store: store,
                         keyPath: \.gate.thresholdDB),
-            range: -80...0,
+            range: gateThresholdRange,
             format: { formatDB($0) },
             enabled: on
         )

@@ -805,4 +805,136 @@ final class OpenConnctDSPTests: XCTestCase {
         }
         XCTAssertEqual(out[0], expected, accuracy: expected * 0.01)
     }
+
+    // MARK: - The noise-floor probe
+    //
+    // Its whole justification is that it measures in the gate's frame. If it
+    // drifts out of that frame the number it produces is still plausible and
+    // still wrong, which is the worst kind of bug to have in a measurement, so
+    // these pin the frame rather than the value.
+
+    func testTheProbeAgreesWithTheGatesOwnDetector() {
+        var strip = makeStrip()
+        oc_channel_strip_set_bypasses(&strip, 0, 1, 1, 1)
+        // A threshold nothing reaches, so the gate stays shut and cannot alter
+        // what it is measuring.
+        oc_gate_configure(&strip.gate, 0, 5, 20, 80, 3, -120)
+        oc_channel_strip_arm_noise_probe(&strip, 1)
+
+        runNormal(&strip, tone(4800, amplitude: 0.02, hz: 500))
+
+        let probe = oc_channel_strip_read_noise_probe_db(&strip)
+        let gate = oc_gate_detector_db(&strip.gate)
+        XCTAssertEqual(probe, gate, accuracy: 0.5,
+                       "the probe and the gate must be looking at the same signal")
+    }
+
+    // The detector high-passes at 120 Hz precisely so that rumble cannot hold a
+    // gate open. A probe that measured rumble would propose a threshold high
+    // enough to swallow speech.
+    func testTheProbeIgnoresRumbleForTheSameReasonTheGateDoes() {
+        var strip = makeStrip()
+        oc_channel_strip_arm_noise_probe(&strip, 1)
+        runNormal(&strip, tone(9600, amplitude: 0.3, hz: 30))
+        let rumble = oc_channel_strip_read_noise_probe_db(&strip)
+
+        var other = makeStrip()
+        oc_channel_strip_arm_noise_probe(&other, 1)
+        runNormal(&other, tone(9600, amplitude: 0.3, hz: 1000))
+        let speech = oc_channel_strip_read_noise_probe_db(&other)
+
+        XCTAssertLessThan(rumble, speech - 20,
+                          "30 Hz at the same amplitude must read far lower than 1 kHz")
+    }
+
+    // The probe sits after pad and gain, because the threshold is compared
+    // against a signal that has been through both.
+    func testTheProbeFollowsGain() {
+        var quiet = makeStrip()
+        oc_channel_strip_arm_noise_probe(&quiet, 1)
+        runNormal(&quiet, tone(9600, amplitude: 0.05, hz: 500))
+        let atUnity = oc_channel_strip_read_noise_probe_db(&quiet)
+
+        var loud = makeStrip()
+        oc_channel_strip_set_gain_db(&loud, 12)
+        oc_channel_strip_arm_noise_probe(&loud, 1)
+        runNormal(&loud, tone(9600, amplitude: 0.05, hz: 500))
+        let atPlusTwelve = oc_channel_strip_read_noise_probe_db(&loud)
+
+        XCTAssertEqual(atPlusTwelve - atUnity, 12, accuracy: 1.0)
+    }
+
+    // Reading restarts the measurement. Without that a single loud moment would
+    // sit in the running maximum for the rest of the window and every remaining
+    // reading would report it, which turns forty samples into one.
+    //
+    // It does not vanish instantly, and that is not a leak: the maximum is taken
+    // over an envelope, and the envelope begins each block where the last one
+    // ended. So a loud moment shows up in the read that contains it and, 25 ms
+    // of release later, in a diminished form in the one after. Two polls, not
+    // forty -- which a 0.9 percentile of sixty readings absorbs without moving.
+    func testALoudMomentDoesNotSurviveMoreThanTheFollowingRead() {
+        var strip = makeStrip()
+        oc_channel_strip_arm_noise_probe(&strip, 1)
+        let silence = Array(repeating: Float(0), count: 2400)
+
+        runNormal(&strip, tone(2400, amplitude: 0.5, hz: 500))
+        let loud = oc_channel_strip_read_noise_probe_db(&strip)
+        XCTAssertGreaterThan(loud, -30, "precondition: something loud was heard")
+
+        runNormal(&strip, silence)
+        let next = oc_channel_strip_read_noise_probe_db(&strip)
+        XCTAssertLessThanOrEqual(next, loud + 0.1, "the maximum must not grow in silence")
+
+        // 50 ms of silence at a 25 ms release is two time constants, so the
+        // envelope arrives at the next block 20*log10(e^-2) = 17.4 dB down, and
+        // that starting value is what the maximum reports. 15 dB is that figure
+        // with room for the tail of the tone; a third read would be 34.7 dB.
+        runNormal(&strip, silence)
+        XCTAssertLessThan(oc_channel_strip_read_noise_probe_db(&strip), loud - 15,
+                          "and by the second read it must be falling steeply")
+    }
+
+    // Disarmed is the normal state, and it must cost nothing and report nothing.
+    func testADisarmedProbeStaysAtItsFloor() {
+        var strip = makeStrip()
+        runNormal(&strip, tone(4800, amplitude: 0.5, hz: 500))
+        XCTAssertEqual(oc_channel_strip_read_noise_probe_db(&strip), OC_NOISE_PROBE_FLOOR_DB)
+    }
+
+    // The all-bypassed vectorised shortcut never visits a sample individually,
+    // so arming has to suppress it. A probe that silently measured nothing
+    // whenever every effect happened to be switched off would fail in exactly
+    // the situation it is used in -- choosing a threshold for a gate that is
+    // still off.
+    func testTheProbeWorksWhenEveryEffectIsSwitchedOff() {
+        var strip = makeStrip()
+        oc_channel_strip_set_bypasses(&strip, 1, 1, 1, 1)
+        oc_channel_strip_set_hpf(&strip, OC_HPF_OFF, 75)
+        oc_channel_strip_arm_noise_probe(&strip, 1)
+
+        runNormal(&strip, tone(9600, amplitude: 0.1, hz: 500))
+        XCTAssertGreaterThan(oc_channel_strip_read_noise_probe_db(&strip), -40,
+                             "the shortcut must not swallow an armed probe")
+    }
+
+    // And the shortcut must still be there when nobody is measuring, because it
+    // is what keeps an untouched channel cheap.
+    func testTheShortcutSurvivesDisarming() {
+        var strip = makeStrip()
+        oc_channel_strip_set_bypasses(&strip, 1, 1, 1, 1)
+        oc_channel_strip_set_gain_db(&strip, 6)
+        runNormal(&strip, Array(repeating: Float(0), count: 4800))
+
+        oc_channel_strip_arm_noise_probe(&strip, 0)
+        var out = [Float](repeating: 0, count: 4)
+        let input: [Float] = [1, 1, 1, 1]
+        let expected = pow(Float(10), 6.0 / 20.0)
+        input.withUnsafeBufferPointer { ib in
+            out.withUnsafeMutableBufferPointer { ob in
+                oc_channel_strip_process(&strip, ib.baseAddress!, ob.baseAddress!, 4)
+            }
+        }
+        XCTAssertEqual(out[3], expected, accuracy: expected * 0.01)
+    }
 }

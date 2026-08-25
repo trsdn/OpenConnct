@@ -45,6 +45,13 @@ enum OCParam: UInt32 {
     /// render thread never has to reason about the state of other channels.
     case effectivelyMuted = 52
 
+    /// Arms or disarms the noise-floor probe. Sent through the queue like any
+    /// other parameter rather than written straight into the strip: the probe
+    /// resets a biquad and a running maximum, and doing that from the main
+    /// thread while the render thread is midway through a block is exactly the
+    /// kind of shortcut this queue exists to avoid.
+    case noiseProbeArmed = 60
+
     /// Packs a channel index and this parameter into the queue's 32-bit id.
     func packed(channel: Int) -> UInt32 {
         (UInt32(channel) << 16) | rawValue

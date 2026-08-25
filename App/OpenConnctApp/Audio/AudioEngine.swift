@@ -416,6 +416,16 @@ final class AudioEngine {
         return meters
     }
 
+    /// Loudest the noise probe heard since the last call, in the gate's own
+    /// detector frame. Reading restarts the measurement, so this is only
+    /// meaningful to one caller at a time -- which is the case, because it is
+    /// only read by a calibration that has armed it.
+    func noiseProbeDB(forChannel index: Int) -> Float {
+        guard index >= 0, index < Int(rt.pointee.channelCount) else { return -120 }
+        let channel = rt.pointee.channels + index
+        return oc_channel_strip_read_noise_probe_db(channel.pointee.strip)
+    }
+
     /// Level of the summed mix leaving for the virtual device.
     ///
     /// Returned as `ChannelMeters` so the master bar can reuse the same view and

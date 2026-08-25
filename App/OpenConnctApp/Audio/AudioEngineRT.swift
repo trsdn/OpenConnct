@@ -393,6 +393,9 @@ func rtApplyParam(_ channel: UnsafeMutablePointer<ChannelRT>, _ paramID: UInt32,
         channel.pointee.params.muted = value
         rtRecomputeTargetGain(channel)
 
+    case OCParam.noiseProbeArmed.rawValue:
+        oc_channel_strip_arm_noise_probe(p, value > 0.5 ? 1 : 0)
+
     default:
         break
     }

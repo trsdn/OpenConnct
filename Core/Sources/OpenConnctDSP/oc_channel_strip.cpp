@@ -29,6 +29,9 @@ void oc_channel_strip_init(oc_channel_strip *strip, oc_sample_rate sr)
     oc_meter_init(&strip->input_meter, sr, 300.0f);
     oc_meter_init(&strip->output_meter, sr, 300.0f);
     strip->muted = 0;
+    oc_gate_detector_init(&strip->noise_probe, sr);
+    strip->noise_probe_armed = 0;
+    strip->noise_probe_max_db = OC_NOISE_PROBE_FLOOR_DB;
 }
 
 void oc_channel_strip_set_pad_db(oc_channel_strip *strip, oc_float db)
@@ -82,7 +85,12 @@ void oc_channel_strip_process(oc_channel_strip *strip, const oc_float *in, oc_fl
         && strip->bypass_exciter
         && strip->bypass_bass_enhancer;
 
+    // The probe has to see the same sample the gate would, so it cannot be fed
+    // from a vectorised shortcut that never visits a sample individually. It is
+    // armed only while someone is actively measuring, so the shortcut is still
+    // there the rest of the time.
     if (all_bypassed
+        && !strip->noise_probe_armed
         && oc_smoothed_param_is_settled(&strip->pad_gain)
         && oc_smoothed_param_is_settled(&strip->gain)) {
         oc_float scalar = strip->pad_gain.current * strip->gain.current;
@@ -98,6 +106,14 @@ void oc_channel_strip_process(oc_channel_strip *strip, const oc_float *in, oc_fl
 
         if (strip->hpf_mode != OC_HPF_OFF) {
             sample = oc_biquad_cascade2_process_sample(&strip->hpf, sample);
+        }
+
+        // Exactly here: after pad, gain and the high-pass, before the gate.
+        // This is the gate's input, which is the only place a measurement of a
+        // room can be compared against a gate threshold.
+        if (strip->noise_probe_armed) {
+            oc_float probe_db = oc_gate_detector_process_sample(&strip->noise_probe, sample);
+            if (probe_db > strip->noise_probe_max_db) strip->noise_probe_max_db = probe_db;
         }
 
         if (!strip->bypass_gate) {
@@ -187,4 +203,24 @@ oc_float oc_channel_strip_comp_gr_db(const oc_channel_strip *strip)
 {
     if (strip->bypass_compressor || strip->muted) return 0.0f;
     return oc_compressor_gain_reduction_db(&strip->compressor);
+}
+
+void oc_channel_strip_arm_noise_probe(oc_channel_strip *strip, int armed)
+{
+    oc_gate_detector_reset(&strip->noise_probe);
+    strip->noise_probe_max_db = OC_NOISE_PROBE_FLOOR_DB;
+    strip->noise_probe_armed = armed;
+}
+
+// Read and restart. The reader is not the render thread, so the reset can in
+// principle land between the render thread's compare and its store and drop one
+// block's maximum. The cost of that is one lost reading out of the forty a
+// measurement collects, and the alternative -- a second buffer and a sequence
+// counter -- would be a lot of machinery to protect a number that is about to
+// have a percentile taken of it anyway.
+oc_float oc_channel_strip_read_noise_probe_db(oc_channel_strip *strip)
+{
+    oc_float value = strip->noise_probe_max_db;
+    strip->noise_probe_max_db = OC_NOISE_PROBE_FLOOR_DB;
+    return value;
 }

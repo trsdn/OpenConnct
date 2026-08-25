@@ -227,6 +227,43 @@ microphone. When it can answer, it says the numbers it measured and what they
 will become, and nothing changes until you press the button that names the new
 gain.
 
+### Setting the noise gate from your room
+
+The noise gate's factory threshold is a guess about a room it has never heard.
+It is **−45 dBFS**, which is fine for a close microphone in a quiet study and
+useless for anything else: measured here, one input's noise floor sits at
+−36.7 dBFS, *above* the threshold, so its gate can never close. No amount of
+adjusting attack or release fixes a threshold that is under the floor.
+
+*Measure the room…* in the Noise Gate panel arms a probe for three seconds while
+you stay quiet, and proposes a threshold **6 dB** above what it measured.
+
+- **It is a second detector, not the gate's own.** The gate is normally switched
+  *off* while you are choosing a threshold for it, and a switched-off gate
+  detects nothing. The probe is the same detector — 120 Hz key high-pass, 1 ms
+  attack, 25 ms release — fed the same sample, at the same point in the chain
+  (after pad, gain and HPF; before the gate). That frame is defined once, in
+  `oc_gate_detector`, so the two cannot drift apart.
+- **It could not reuse a meter.** The input meter runs on the raw input, before
+  pad and gain, and it is a peak meter: there is no arithmetic that turns a peak
+  into an envelope. This is the opposite of the gain calibration, which *can*
+  work off the input meter, because gain is linear and a peak scales with it.
+- **The margin is the gate's own hysteresis.** The gate closes at threshold minus
+  hysteresis, which defaults to 6 dB. A 6 dB margin therefore puts the *closing*
+  point back exactly on the measured floor: the gate opens well clear of the
+  room and does not slam shut on a word tailing off.
+- **A high percentile, where the gain calibration takes the middle.** The gain
+  calibration asks how loud the room normally is, and the middle answers that.
+  This asks what the threshold must clear so the gate stays shut — and the gate
+  opens on a *single* excursion, so excursions are the measurement. Still 0.9
+  rather than the maximum, so one door slam does not set your threshold.
+
+It refuses in three cases rather than answer wrongly: the channel is muted (its
+whole chain is skipped, so it would report an empty room); the floor is below
+−100 dBFS, which is a dead channel and not a quiet one; and the floor is above
+−25 dBFS, where any threshold sits inside the range quiet speech occupies and
+moving the microphone will do more than this setting can.
+
 ### New devices arrive muted
 
 A device OpenConnct has never seen before starts **muted**, and its mute button

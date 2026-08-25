@@ -541,6 +541,37 @@ final class ParameterStore: ObservableObject {
         return engine.meters(forChannel: index)
     }
 
+    // MARK: - Noise-floor probe
+    //
+    // Arming goes through the parameter queue; reading does not, because it is
+    // a plain float read from the poll thread like every other meter here.
+
+    func armNoiseProbe(_ armed: Bool, for uid: String) {
+        guard let index = channels.firstIndex(where: { $0.deviceUID == uid }) else { return }
+        send(.noiseProbeArmed, channel: index, armed ? 1 : 0)
+    }
+
+    /// Loudest the probe heard since the last call. `nil` when the channel is
+    /// gone, or silent for a reason the caller should report rather than
+    /// measure through: a muted channel skips the whole chain the probe sits
+    /// in, so it would read an empty room forever.
+    func noiseProbeReading(for uid: String) -> Float? {
+        guard let engine,
+              let index = channels.firstIndex(where: { $0.deviceUID == uid }),
+              engine.meters(forChannel: index).connected
+        else { return nil }
+        return engine.noiseProbeDB(forChannel: index)
+    }
+
+    func channel(for uid: String) -> ChannelSettings? {
+        channels.first(where: { $0.deviceUID == uid })
+    }
+
+    func isSilenced(_ uid: String) -> Bool {
+        guard let settings = channels.first(where: { $0.deviceUID == uid }) else { return true }
+        return isEffectivelyMuted(settings)
+    }
+
     private func pollMeters() {
         guard let engine else { return }
         for (index, settings) in channels.enumerated() {

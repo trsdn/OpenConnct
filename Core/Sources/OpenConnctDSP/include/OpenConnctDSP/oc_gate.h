@@ -21,6 +21,24 @@ typedef enum oc_gate_state { OC_GATE_CLOSED=0, OC_GATE_ATTACKING=1, OC_GATE_OPEN
 #define OC_GATE_DETECTOR_ATTACK_MS 1.0f
 #define OC_GATE_DETECTOR_RELEASE_MS 25.0f
 
+/* The side-chain, on its own.
+   The gate decides purely by comparing this against a threshold, so anything
+   that wants to talk about the threshold in decibels -- measuring a room in
+   order to propose one, most of all -- has to speak in exactly this frame. It
+   is a separate type so that there is one definition of that frame rather than
+   two that agree today. Copying the constants would work until one of them
+   moved. */
+typedef struct oc_gate_detector {
+    oc_biquad key_hp;
+    oc_float env;
+    oc_float attack_coeff, release_coeff;
+} oc_gate_detector;
+
+void oc_gate_detector_init(oc_gate_detector *d, oc_sample_rate sr);
+void oc_gate_detector_reset(oc_gate_detector *d);
+/* Returns the envelope in dBFS, which is the number the gate compares. */
+oc_float oc_gate_detector_process_sample(oc_gate_detector *d, oc_float x);
+
 typedef struct oc_gate {
     oc_sample_rate sr;
     oc_float threshold_db, close_threshold_db;
@@ -30,9 +48,7 @@ typedef struct oc_gate {
     oc_gate_state state;
     uint32_t hold_remaining, hold_samples;
     oc_float attack_coeff, release_coeff;
-    oc_biquad key_hp;
-    oc_float env;
-    oc_float detector_attack_coeff, detector_release_coeff;
+    oc_gate_detector det;
 } oc_gate;
 
 void oc_gate_init(oc_gate *g, oc_sample_rate sr);
