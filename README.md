@@ -163,6 +163,26 @@ make uninstall-driver
 
 5. Settings are **persisted per device UID**. Unplug a mic and plug it back in — its strip remembers every parameter.
 
+### Reading the level meter
+
+Everything on the meter is a **peak** level in dBFS. That is worth stating,
+because for a while it was not true, and a meter whose parts disagree about what
+they measure is worse than no meter.
+
+| What you see | What it is |
+|---|---|
+| **The filled bar** | The peak, with meter ballistics — instant rise, 300 ms fall. Green up to −6 dBFS, amber to −1, red above. |
+| **The thin mark above it** | The loudest peak of the last 1.5 s, then falling at 12 dB/s. Tells you whether you *just* clipped, which a bar that has already fallen cannot. |
+| **The lighter band in the track** | Where a speaking voice should sit: **−18 to −6 dBFS**, the usual broadcast range for a live voice channel. |
+| **The word beside it** | `silent` / `quiet` / `good` / `loud` / `too loud`, from the same held peak the mark shows — so it does not flip to `quiet` every time you pause for breath. |
+
+The bar used to show the **RMS** while the mark, the band and the word were all
+about the **peak**. Speech has a crest factor around 12 dB, so a voice sitting
+correctly at −12 dBFS drew its bar down at −24 dBFS: the mark at 64 % of the
+track, the bar at 28 %, and a target band the bar could not reach at any safe
+level. Following the picture — pushing the solid bar into the band — meant peaks
+around −6 dBFS, right at the edge of clipping. One quantity, one scale.
+
 ### New devices arrive muted
 
 A device OpenConnct has never seen before starts **muted**, and its mute button

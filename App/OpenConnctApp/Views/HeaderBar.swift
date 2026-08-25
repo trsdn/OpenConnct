@@ -146,7 +146,7 @@ struct MasterMeterBar: View {
     @ObservedObject var source: ChannelMeterSource
 
     var body: some View {
-        let verdict = meterVerdict(peakDB: source.meters.postFaderPeakDB)
+        let verdict = meterVerdict(peakDB: source.heldPeakDB)
 
         HStack(spacing: 10) {
             Text("MASTER")

@@ -69,9 +69,18 @@ final class MeterNSView: NSView {
         }
     }
 
-    private var rmsDB: Float = -120
     private var peakDB: Float = -120
     private var reductionDB: Float = 0
+
+    /// The thin mark's value.
+    ///
+    /// The filled bar shows the peak now, so the mark can no longer show the
+    /// peak too — it would sit exactly on top of the bar and say nothing. It
+    /// holds the loudest moment of the last second and a half instead, which is
+    /// the one thing a bar cannot tell you: whether you *just* clipped.
+    private var hold = PeakHold()
+    private var lastApplyTime: CFTimeInterval = 0
+    private var holdDB: Float { hold.db }
 
     // Last values converted to pixels. A tick that does not move any bar by a
     // whole pixel is discarded without touching the display.
@@ -118,17 +127,32 @@ final class MeterNSView: NSView {
     private func apply(_ m: ChannelMeters) {
         switch tap {
         case .input:
-            rmsDB = m.inputRMSDB; peakDB = m.inputPeakDB
+            peakDB = m.inputPeakDB
         case .output:
-            rmsDB = m.outputRMSDB; peakDB = m.outputPeakDB
+            peakDB = m.outputPeakDB
         case .postFader:
-            rmsDB = m.postFaderRMSDB; peakDB = m.postFaderPeakDB
+            peakDB = m.postFaderPeakDB
         case .gateReduction:
             reductionDB = -m.gateReductionDB
         case .compressorReduction:
             reductionDB = -m.compressorReductionDB
         }
+        if !isReductionMeter { advanceHold() }
         refresh(force: false)
+    }
+
+    /// Moves the mark on by however long has actually passed.
+    ///
+    /// Measured rather than counted, because the meter rate is settable
+    /// (`OPENCONNCT_METER_HZ`) and a hold counted in ticks would last a
+    /// different length of time at every rate. Clamped, because a window that
+    /// was occluded or a machine that slept must not drop the mark out of sight
+    /// in one frame.
+    private func advanceHold() {
+        let now = CACurrentMediaTime()
+        let dt = lastApplyTime == 0 ? 0 : min(now - lastApplyTime, 0.25)
+        lastApplyTime = now
+        hold.advance(to: peakDB, dt: dt)
     }
 
     private var isReductionMeter: Bool {
@@ -149,8 +173,26 @@ final class MeterNSView: NSView {
             fill = (reductionFraction(reductionDB) * length).rounded()
             peak = 0
         } else {
-            let level = muted ? Float(-120) : rmsDB
-            let held  = muted ? Float(-120) : peakDB
+            // The bar shows the peak, not the RMS.
+            //
+            // It used to show the RMS while the mark, the target band and the
+            // word beside the meter all spoke about the peak. Three quantities
+            // on one scale, two of them invisible, and the eye follows the solid
+            // bar. Speech has a crest factor around 12 dB, so a voice sitting
+            // correctly at -12 dBFS peak drew its bar at -24 dBFS: 64% of the
+            // track for the mark, 28% for the bar, and the tooltip promising
+            // that "the loudest parts of your speech should land" in a band the
+            // bar could not reach.
+            //
+            // Not merely confusing — actively harmful. The band is -18…-6 dBFS,
+            // so pushing the *RMS* bar into it means peaks around -6, which is
+            // the edge of clipping. Following the picture made you clip.
+            //
+            // `peakDB` already has meter ballistics from the DSP side: instant
+            // attack, 300 ms fall (`kMeterDecayMS`). So this is not a raw
+            // block peak and does not flicker.
+            let level = muted ? Float(-120) : peakDB
+            let held  = muted ? Float(-120) : holdDB
             fill = (meterPosition(level) * length).rounded()
             peak = (meterPosition(held) * length).rounded()
         }
@@ -303,18 +345,21 @@ final class MeterNSView: NSView {
             return
         }
 
-        let level = muted ? Float(-120) : rmsDB
-        let held  = muted ? Float(-120) : peakDB
+        // Both quantities are peaks now — the bar the ballistic peak from the
+        // DSP, the mark the hold on top of it. See `refresh(force:)` for why
+        // the bar stopped showing the RMS.
+        let level = muted ? Float(-120) : peakDB
+        let held  = muted ? Float(-120) : holdDB
 
-        let rmsLen = meterPosition(level) * length
+        let barLen = meterPosition(level) * length
         let amberPos = meterPosition(meterAmberDB) * length
         let redPos = meterPosition(meterRedDB) * length
 
-        segment(ctx, from: 0, to: min(rmsLen, amberPos),
+        segment(ctx, from: 0, to: min(barLen, amberPos),
                 colour: Theme.meterGreen, vertical: vertical, thickness: thickness)
-        segment(ctx, from: amberPos, to: min(rmsLen, redPos),
+        segment(ctx, from: amberPos, to: min(barLen, redPos),
                 colour: Theme.meterAmber, vertical: vertical, thickness: thickness)
-        segment(ctx, from: redPos, to: rmsLen,
+        segment(ctx, from: redPos, to: barLen,
                 colour: Theme.meterRed, vertical: vertical, thickness: thickness)
 
         let peakPos = meterPosition(held) * length

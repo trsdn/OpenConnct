@@ -73,6 +73,19 @@ final class ChannelMeterSource: ObservableObject {
     private var listeners: [ObjectIdentifier: Listener] = [:]
     private var textTick = 0
 
+    /// The loudest post-fader peak of the last second and a half, for the
+    /// plain-language verdict.
+    ///
+    /// The verdict cannot use the instantaneous peak. The meter's own fall is
+    /// 300 ms — about 29 dB per second — so a voice peaking correctly at
+    /// -12 dBFS reads -24 dBFS a third of a second later, and the word beside
+    /// the meter flips to "quiet" in every pause between sentences. The
+    /// question it answers is "am I set right?", and the honest input to that
+    /// is the loudest thing said recently.
+    @Published private(set) var heldPeakDB: Float = -120
+    private var peakHold = PeakHold()
+    private var lastPublishTime: CFTimeInterval = 0
+
     /// Publish text this many meter ticks apart, so the numbers land near 5 Hz
     /// whatever the meter rate is.
     private static let textDivider: Int = {
@@ -92,6 +105,14 @@ final class ChannelMeterSource: ObservableObject {
 
     func publish(_ next: ChannelMeters) {
         live = next
+
+        // Clamped for the same reason the meter views clamp: an app that was
+        // suspended must not have the hold fall off a cliff on the first tick
+        // after it wakes.
+        let now = CACurrentMediaTime()
+        let dt = lastPublishTime == 0 ? 0 : min(now - lastPublishTime, 0.25)
+        lastPublishTime = now
+        peakHold.advance(to: next.postFaderPeakDB, dt: dt)
         var dead: [ObjectIdentifier] = []
         for (key, listener) in listeners {
             guard listener.owner != nil else { dead.append(key); continue }
@@ -104,6 +125,10 @@ final class ChannelMeterSource: ObservableObject {
         textTick = 0
         let rounded = next.roundedForDisplay()
         if rounded != meters { meters = rounded }
+        // Rounded for the same reason everything else here is: the raw value
+        // wanders in the third decimal and every change is a graph transaction.
+        let heldRounded = (peakHold.db * 2).rounded() / 2
+        if heldRounded != heldPeakDB { heldPeakDB = heldRounded }
     }
 }
 
@@ -176,7 +201,7 @@ struct LiveInputMeterRow: View {
     @ObservedObject var source: ChannelMeterSource
 
     var body: some View {
-        let verdict = meterVerdict(peakDB: source.meters.postFaderPeakDB)
+        let verdict = meterVerdict(peakDB: source.heldPeakDB)
         VStack(alignment: .leading, spacing: 4) {
             meterLine("IN", tap: .input, scale: false)
             meterLine("OUT", tap: .postFader, scale: true)
