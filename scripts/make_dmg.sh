@@ -10,7 +10,11 @@ APP_NAME="OpenConnct"
 DIST_DIR="${DIST_DIR:-dist}"
 APP_PATH="$DIST_DIR/$APP_NAME.app"
 PKG_PATH="${PKG_PATH:-$DIST_DIR/OpenConnct-driver.pkg}"
-DMG_PATH="${DMG_PATH:-$DIST_DIR/OpenConnct-macos.dmg}"
+# shellcheck source=lib_version.sh
+. "$(dirname "$0")/lib_version.sh"
+VERSION="$(resolve_version)"
+# AppUpdater only accepts a release asset named exactly OpenConnct-<version>.dmg.
+DMG_PATH="${DMG_PATH:-$DIST_DIR/OpenConnct-$VERSION.dmg}"
 STAGING_DIR="$DIST_DIR/dmg-staging"
 
 if [[ ! -d "$APP_PATH" ]]; then echo "App bundle not found at $APP_PATH" >&2; exit 1; fi

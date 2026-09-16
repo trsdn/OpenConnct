@@ -15,6 +15,10 @@ DRIVER_PATH="$DIST_DIR/$DRIVER_NAME"
 EMBEDDED_DRIVER_PATH="$APP_PATH/Contents/Library/Audio/Plug-Ins/HAL/$DRIVER_NAME"
 REQUIRE_SIGNING="${REQUIRE_SIGNING:-1}"
 ENTITLEMENTS="${ENTITLEMENTS:-App/OpenConnctApp/OpenConnct.entitlements}"
+INFO_PLIST="App/OpenConnctApp/Info.plist"
+# shellcheck source=lib_version.sh
+. "$(dirname "$0")/lib_version.sh"
+VERSION="$(resolve_version)"
 
 if [[ ! -f Makefile && ! -f makefile && ! -f GNUmakefile ]]; then
   echo "Makefile not found; this script expects the app/driver build Makefile to be present." >&2
@@ -28,6 +32,17 @@ resolve_identity() {
   fi
   printf '%s' "$identity"
 }
+
+# Stamped here rather than checked in at this value: AppUpdater compares this
+# against the GitHub release tag to decide whether a newer build exists, so a
+# CFBundleShortVersionString that never changed would make every future
+# release look newer forever, even to a machine that just installed it.
+# Restored on exit so a local release run doesn't leave the working tree
+# dirty.
+plist_backup="$(mktemp)"
+cp "$INFO_PLIST" "$plist_backup"
+trap 'mv "$plist_backup" "$INFO_PLIST"' EXIT
+/usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $VERSION" "$INFO_PLIST"
 
 make clean
 # embed-driver depends on both build and driver, and is what stages the

@@ -10,13 +10,9 @@ if [[ -f "$ENV_FILE" ]]; then set -a; # shellcheck source=/dev/null
 DRIVER_NAME="OpenConnct.driver"
 DIST_DIR="${DIST_DIR:-dist}"
 DRIVER_PATH="${DRIVER_PATH:-$DIST_DIR/$DRIVER_NAME}"
-if [[ -z "${VERSION:-}" ]]; then
-  if version_tag="$(git describe --tags --abbrev=0 2>/dev/null)"; then
-    VERSION="${version_tag#v}"
-  else
-    VERSION="0.1.0"
-  fi
-fi
+# shellcheck source=lib_version.sh
+. "$(dirname "$0")/lib_version.sh"
+VERSION="$(resolve_version)"
 PKG_ROOT="$DIST_DIR/pkg-root"
 PKG_SCRIPTS="$DIST_DIR/pkg-scripts"
 COMPONENT_PKG="$DIST_DIR/OpenConnct-driver-component.pkg"

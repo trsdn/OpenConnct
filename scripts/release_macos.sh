@@ -6,7 +6,9 @@ ENV_FILE="${RELEASE_ENV_FILE:-.release.env}"
 if [[ -f "$ENV_FILE" ]]; then set -a; # shellcheck source=/dev/null
   . "$ENV_FILE"; set +a; fi
 PKG_PATH="${PKG_PATH:-dist/OpenConnct-driver.pkg}"
-DMG_PATH="${DMG_PATH:-dist/OpenConnct-macos.dmg}"
+# shellcheck source=lib_version.sh
+. "$(dirname "$0")/lib_version.sh"
+DMG_PATH="${DMG_PATH:-dist/OpenConnct-$(resolve_version).dmg}"
 
 ./scripts/build_release.sh
 PKG_PATH="$PKG_PATH" ./scripts/make_pkg.sh

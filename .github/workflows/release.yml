@@ -69,7 +69,7 @@ jobs:
 
       - name: Build app, driver, PKG, and DMG
         env:
-          DMG_PATH: dist/OpenConnct-macos.dmg
+          DMG_PATH: dist/OpenConnct-${{ steps.release.outputs.version }}.dmg
           PKG_PATH: dist/OpenConnct-driver.pkg
           VERSION: ${{ steps.release.outputs.version }}
         run: |
@@ -90,7 +90,7 @@ jobs:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
-          DMG_PATH: dist/OpenConnct-macos.dmg
+          DMG_PATH: dist/OpenConnct-${{ steps.release.outputs.version }}.dmg
           PKG_PATH: dist/OpenConnct-driver.pkg
         run: |
           set -euo pipefail
@@ -114,8 +114,8 @@ jobs:
         with:
           name: OpenConnct-macos-release
           path: |
-            dist/OpenConnct-macos.dmg
-            dist/OpenConnct-macos.dmg.sha256
+            dist/OpenConnct-${{ steps.release.outputs.version }}.dmg
+            dist/OpenConnct-${{ steps.release.outputs.version }}.dmg.sha256
             dist/OpenConnct-driver.pkg
             dist/OpenConnct-driver.pkg.sha256
 
@@ -130,6 +130,6 @@ jobs:
             gh release create "$RELEASE_TAG" --title "OpenConnct ${RELEASE_VERSION}" --notes "macOS app DMG and CoreAudio driver installer."
           fi
           gh release upload "$RELEASE_TAG" \
-            dist/OpenConnct-macos.dmg dist/OpenConnct-macos.dmg.sha256 \
+            "dist/OpenConnct-${RELEASE_VERSION}.dmg" "dist/OpenConnct-${RELEASE_VERSION}.dmg.sha256" \
             dist/OpenConnct-driver.pkg dist/OpenConnct-driver.pkg.sha256 \
             --clobber

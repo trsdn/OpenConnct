@@ -5,7 +5,9 @@ cd "$(dirname "$0")/.."
 ENV_FILE="${RELEASE_ENV_FILE:-.release.env}"
 if [[ -f "$ENV_FILE" ]]; then set -a; # shellcheck source=/dev/null
   . "$ENV_FILE"; set +a; fi
-DMG_PATH="${DMG_PATH:-dist/OpenConnct-macos.dmg}"
+# shellcheck source=lib_version.sh
+. "$(dirname "$0")/lib_version.sh"
+DMG_PATH="${DMG_PATH:-dist/OpenConnct-$(resolve_version).dmg}"
 if [[ ! -f "$DMG_PATH" ]]; then echo "DMG not found at $DMG_PATH" >&2; exit 1; fi
 if [[ -n "${NOTARY_PROFILE:-}" ]]; then
   xcrun notarytool submit "$DMG_PATH" --keychain-profile "$NOTARY_PROFILE" --wait

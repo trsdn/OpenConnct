@@ -1,4 +1,4 @@
-.PHONY: all build driver sign-app clean run test test-driver test-all install-driver uninstall-driver icon deviceprobe
+.PHONY: all build driver sign-app clean run test test-driver test-all install-driver uninstall-driver icon deviceprobe update-deps
 
 APP_NAME       = OpenConnct
 DRIVER_NAME    = OpenConnct
@@ -25,6 +25,15 @@ DSP_INCLUDE    = Core/Sources/OpenConnctDSP/include
 DSP_SRC        = $(wildcard Core/Sources/OpenConnctDSP/*.cpp)
 DSP_LIB        = $(DIST_DIR)/libOpenConnctDSP.a
 DSP_OBJ_DIR    = $(DIST_DIR)/obj
+
+# In-app updates (AppUpdater, resolved via SwiftPM — see Update/Package.swift
+# for why this is a real dependency rather than source compiled straight into
+# the app like Core/Sources/OpenConnctControl).
+UPDATE_DIR     = Update
+UPDATE_BUILD   = $(UPDATE_DIR)/.build/apple/Products/Release
+UPDATE_OBJS    = $(UPDATE_BUILD)/OpenConnctUpdate_Module.o \
+                 $(UPDATE_BUILD)/AppUpdater_Module.o \
+                 $(UPDATE_BUILD)/Version_Module.o
 
 all: driver build
 
@@ -54,6 +63,17 @@ $(DSP_LIB): $(DSP_SRC)
 	@libtool -static -o $(DSP_LIB) $(DSP_OBJ_DIR)/*.o
 	@echo "Built $(DSP_LIB)"
 
+# --- In-app updates ------------------------------------------------------------
+# Built universal unconditionally, regardless of UNIVERSAL=1: the object files
+# SwiftPM produces here are fat (arm64 + x86_64), and the linker below picks
+# the one slice it needs for whichever arch swiftc is currently targeting, so
+# an arm64-only dev build gets no benefit from asking for less. `swift build`
+# is itself incremental, so re-running this on every `make build` costs
+# nothing once resolved.
+update-deps:
+	@echo "  resolving AppUpdater (in-app updates)"
+	@cd $(UPDATE_DIR) && swift build -c release --arch arm64 --arch x86_64
+
 # --- App ----------------------------------------------------------------------
 # Dev builds are native-arch only for speed. Release builds pass UNIVERSAL=1,
 # which compiles each slice separately and lipos them together — swiftc, unlike
@@ -67,14 +87,14 @@ SWIFT_FLAGS = -parse-as-library -O \
 	-framework SwiftUI -framework AppKit -framework CoreAudio -framework AudioToolbox \
 	-framework AVFoundation -framework Accelerate \
 	-import-objc-header App/OpenConnctApp/OpenConnct-Bridging-Header.h \
-	-I $(DSP_INCLUDE)
+	-I $(DSP_INCLUDE) -I $(UPDATE_BUILD)
 
-build: $(DSP_LIB)
+build: $(DSP_LIB) update-deps
 	@mkdir -p $(APP_BUNDLE)/Contents/MacOS $(APP_BUNDLE)/Contents/Resources $(DSP_OBJ_DIR)
 	@for arch in $(APP_ARCHS); do \
 		echo "  compiling $(APP_NAME) ($$arch)"; \
 		swiftc $(SWIFT_FLAGS) -target $$arch-apple-macosx$(DEPLOY_TARGET) \
-			-o $(DSP_OBJ_DIR)/$(APP_NAME)-$$arch $(APP_SRC) $(DSP_LIB) -lc++ || exit 1; \
+			-o $(DSP_OBJ_DIR)/$(APP_NAME)-$$arch $(APP_SRC) $(DSP_LIB) $(UPDATE_OBJS) -lc++ || exit 1; \
 	done
 	@lipo -create $(foreach a,$(APP_ARCHS),$(DSP_OBJ_DIR)/$(APP_NAME)-$(a)) \
 		-output $(APP_BUNDLE)/Contents/MacOS/$(APP_NAME)
@@ -146,6 +166,7 @@ deviceprobe:
 clean:
 	rm -rf $(DIST_DIR)
 	rm -rf Core/.build
+	rm -rf Update/.build
 	rm -rf tools/driver_harness/build
 	rm -rf tools/deviceprobe/build
 

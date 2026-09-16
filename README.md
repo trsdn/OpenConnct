@@ -292,7 +292,9 @@ once.
 
 ### Permissions: what OpenConnct asks for, and what it does not
 
-OpenConnct asks for **microphone access**, and nothing else.
+OpenConnct asks for **microphone access**, and nothing else through macOS's
+permission system. It does reach the network on its own — see
+[Checking for updates](#checking-for-updates) below.
 
 Some microphones carry their own filter and pad switches on the body, and
 OpenConnct can read their positions to warn you when a filter is already on and
@@ -315,6 +317,23 @@ It reads switch positions and writes nothing — see
 [`docs/device-control.md`](docs/device-control.md) for why writing is not
 possible at all. The **Technical details** panel in the app shows which of the
 two states you are in.
+
+### Checking for updates
+
+OpenConnct checks [its GitHub releases](https://github.com/trsdn/OpenConnct/releases)
+once a day for a newer version, using [AppUpdater](https://github.com/mxcl/AppUpdater).
+That is the only outbound network request the app makes on its own.
+
+A check downloads the release DMG, confirms the app inside is signed with the
+same Developer ID Team, signing identifier and bundle identifier as the running
+copy, then offers an **Install and Restart** button — nothing installs without
+that click. Installing replaces `OpenConnct.app` in place and relaunches it; the
+audio engine stops first, so the OpenConnct Mic device is silent for a few
+seconds during the swap.
+
+Turn it off from the **OpenConnct** menu (**Check for Updates Automatically**),
+or check on demand with **Check for Updates…** in the same menu. The setting
+persists in `UserDefaults` under `updates.automaticChecks.v1`.
 
 ---
 
@@ -489,6 +508,10 @@ OpenConnct/
 │       ├── oc_param_queue.cpp      Lock-free SPSC parameter queue
 │       ├── oc_meter.cpp            Peak + RMS level metering
 │       └── oc_smoothed_param.cpp   Per-sample parameter smoothing
+├── Update/
+│   └── Sources/OpenConnctUpdate/
+│       └── UpdateManager.swift     AppUpdater wrapper — a real SwiftPM module (see
+│                                   Update/Package.swift), unlike Core/Sources/OpenConnctControl
 ├── scripts/
 │   ├── build_release.sh            Clean, universal build, codesign app + driver
 │   ├── install_driver_dev.sh       Dev install: build → sign → sudo install → reload
@@ -514,6 +537,8 @@ xcode-select --install   # Xcode command-line tools
 
 The C/C++ driver and DSP core are compiled by `clang`/`clang++` (bundled with Xcode). The app is compiled by `swiftc`. The test suite uses the Swift Package Manager toolchain.
 
+`make build` also resolves and builds the `Update/` package (AppUpdater) via SwiftPM the first time it runs, which needs network access to fetch the dependency; after that, `swift build`'s own cache makes it a no-op on unchanged sources.
+
 ### Make targets
 
 | Target | What it does |
@@ -528,7 +553,7 @@ The C/C++ driver and DSP core are compiled by `clang`/`clang++` (bundled with Xc
 | `make run` | Build + launch `OpenConnct.app` |
 | `make install-driver` | Build, sign, sudo-install driver, restart CoreAudio |
 | `make uninstall-driver` | sudo-remove driver, restart CoreAudio |
-| `make clean` | Remove `dist/` and `Core/.build/` |
+| `make clean` | Remove `dist/`, `Core/.build/` and `Update/.build/` |
 
 > **Dev vs. release builds.** `make build` compiles only the native architecture for speed. Pass `UNIVERSAL=1` to produce the arm64+x86\_64 lipo'd binary that goes into a release. `swiftc`, unlike `clang`, cannot emit a fat binary in one pass; the Makefile compiles each slice separately and calls `lipo`.
 
@@ -569,7 +594,7 @@ It produces:
 
 | Artifact | Contents |
 |---|---|
-| `OpenConnct-macos.dmg` | Signed + notarized DMG: `OpenConnct.app` + `OpenConnct-driver.pkg` |
+| `OpenConnct-<version>.dmg` | Signed + notarized DMG: `OpenConnct.app` + `OpenConnct-driver.pkg`. Named `<version>` rather than a fixed string because in-app updates (see below) match on it. |
 | `OpenConnct-driver.pkg` | Signed + notarized flat package installing the driver to `/Library/Audio/Plug-Ins/HAL/` |
 | `*.sha256` | SHA-256 checksums |
 
@@ -589,6 +614,7 @@ cp .release.env.example .release.env
 
 | Variable | Required for | Description |
 |---|---|---|
+| `VERSION` | Versioning | Stamped into `CFBundleShortVersionString`, the driver `.pkg`, and the DMG's filename. Defaults to `git describe --tags --abbrev=0` (the `v` prefix stripped), or `0.1.0` with no tags. |
 | `CODE_SIGN_IDENTITY` | Signing | Full `Developer ID Application: Name (TEAMID)` string. Auto-detected from Keychain if unset. |
 | `TEAM_ID` | Informational | Apple Team ID (10-character string). |
 | `NOTARY_PROFILE` | Notarization | Keychain profile name stored by `xcrun notarytool store-credentials`. Preferred over bare credentials. |

@@ -1,14 +1,17 @@
+import OpenConnctUpdate
 import SwiftUI
 
 @main
 struct OpenConnctApp: App {
     @StateObject private var store = ParameterStore()
+    @StateObject private var updates = UpdateManager()
     private let engine = AudioEngine()
 
     var body: some Scene {
         WindowGroup("OpenConnct") {
             RootView()
                 .environmentObject(store)
+                .environmentObject(updates)
                 // maxWidth/maxHeight .infinity are the load-bearing part. With
                 // only min and ideal set, the content refuses to grow past its
                 // ideal size, so any window larger than the ideal left the
@@ -35,6 +38,11 @@ struct OpenConnctApp: App {
         // left, which is what made it look shifted.
         .defaultSize(width: 640, height: 470)
         .windowResizability(.contentMinSize)
+        .commands {
+            CommandGroup(after: .appInfo) {
+                UpdateCommands(updates: updates)
+            }
+        }
     }
 
     private func startAudio() {
@@ -44,5 +52,10 @@ struct OpenConnctApp: App {
         engine.requestPermissionAndStart { granted in
             store.microphonePermissionDenied = !granted
         }
+        // Installing replaces the app bundle out from under this process, so
+        // the audio engine has to let go of the microphones first rather than
+        // being killed mid-buffer.
+        updates.onWillInstall = { [engine] in engine.stop() }
+        updates.startAutomaticChecks()
     }
 }

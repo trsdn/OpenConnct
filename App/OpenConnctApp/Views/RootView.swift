@@ -1,3 +1,4 @@
+import OpenConnctUpdate
 import SwiftUI
 
 // MARK: - RootView
@@ -32,6 +33,7 @@ private struct EditingMic: Identifiable {
 
 struct RootView: View {
     @EnvironmentObject var store: ParameterStore
+    @EnvironmentObject var updates: UpdateManager
     @State private var editing: EditingMic?
     @StateObject private var driverInstaller = DriverInstaller()
 
@@ -40,6 +42,11 @@ struct RootView: View {
             // Absent from the tree entirely unless the driver needs installing
             // or updating, so in the normal case it costs nothing.
             DriverBanner(installer: driverInstaller)
+
+            // Ranked below the driver banner: a pending app update is never as
+            // urgent as a missing driver, which stops the mixer from working
+            // at all.
+            UpdateBanner(updates: updates)
 
             // Above the mixer, not inside it: what it shows — whether the app
             // is working and what is leaving it — is true for the whole
