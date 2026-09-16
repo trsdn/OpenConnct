@@ -588,19 +588,38 @@ Signing secrets are not present in CI, so the driver and app are built unsigned.
 
 ## Releasing
 
-The release workflow (`.github/workflows/release.yml`) triggers on a `v*` tag push or manual `workflow_dispatch`.
+Releases are built, signed, notarized and published by
+[trsdn/macos-notarization-broker](https://github.com/trsdn/macos-notarization-broker)
+(profile `openconnct`). Apple credentials never reach this repository.
 
-It produces:
+```bash
+git tag -a vX.Y.Z -m "OpenConnct vX.Y.Z — <summary>" && git push origin vX.Y.Z
+# then, from a checkout of the broker:
+scripts/request.sh openconnct vX.Y.Z --publish
+```
+
+The broker stamps the tag's version into the app and driver. The signing job
+waits for an approval. `--publish` then uploads these files to the GitHub
+release:
 
 | Artifact | Contents |
 |---|---|
-| `OpenConnct-<version>.dmg` | Signed + notarized DMG: `OpenConnct.app` + `OpenConnct-driver.pkg`. Named `<version>` rather than a fixed string because in-app updates (see below) match on it. |
-| `OpenConnct-driver.pkg` | Signed + notarized flat package installing the driver to `/Library/Audio/Plug-Ins/HAL/` |
-| `*.sha256` | SHA-256 checksums |
+| `OpenConnct-vX.Y.Z-macOS-universal.dmg` / `.zip` | Signed and notarized `OpenConnct.app` (arm64 + x86_64) with the embedded driver |
+| `OpenConnct-X.Y.Z.dmg` | Byte-identical copy of the DMG. It is the only name [in-app updates](#checking-for-updates) look for, so a release without it is invisible to installed copies. |
+| `*.sha256`, `provenance.json`, `preflight-manifest.json` | Checksums and the broker's build provenance |
 
-Both artifacts are attached to the GitHub Release and uploaded as workflow artifacts.
+There is deliberately no release workflow in this repository. The old one
+built without signing secrets and uploaded an unsigned DMG under the updater's
+file name, which would race with the broker's signed copy.
 
-### Local release build
+Changing the bundle identifier, the layout, the architectures, the entitlements
+or the minimum macOS version needs a reviewed broker change first. So does
+bumping AppUpdater: the broker requires `Update/Package.resolved` to equal its
+reviewed copy.
+
+### Local release build (not published)
+
+For testing a signed build on your own machine. Published releases always come from the broker.
 
 ```bash
 cp .release.env.example .release.env
