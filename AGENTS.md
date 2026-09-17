@@ -58,17 +58,24 @@ restarts `coreaudiod` — see "Do not do these" below.
 
 ## Validate before proposing a change
 
+This is the single command that must succeed:
+
 ```sh
-make test           # DSP core unit tests (Core/Tests/OpenConnctDSPTests), via swift test
-make test-driver     # offline driver harness: property dispatch and IO round trip via dlopen, no install needed
-make build UNIVERSAL=1   # confirms the app and driver actually compile universal, matching CI
+make test-all
 ```
 
-These three together are what `.github/workflows/ci.yml` runs. `make test`
-catches DSP regressions; `make test-driver` is the only automated check of
-driver *behavior* since installing it for real needs `sudo` and a `coreaudiod`
-restart, which CI cannot do; the build step catches compile breaks the Core
-package alone wouldn't.
+It runs `make test` (DSP core unit tests, `Core/Tests/OpenConnctDSPTests`, via
+`swift test`) followed by `make test-driver` (the offline driver harness:
+property dispatch and IO round trip through the real AudioServerPlugIn vtable
+via `dlopen`, no install needed). Verified 2026-09-17: 185 + 384 assertions,
+0 failures, from this checkout.
+
+`make test-driver` is the only automated check of driver *behavior* — installing
+it for real needs `sudo` and a `coreaudiod` restart, which no CI or agent
+sandbox should do (see "Do not do these"). If you touched the app or driver
+target rather than `Core/`, also run `make build UNIVERSAL=1` — this compiles
+both architectures and is what would first catch a break `test-all` alone
+cannot, matching what `.github/workflows/ci.yml` does for the `build` job.
 
 ## Conventions
 

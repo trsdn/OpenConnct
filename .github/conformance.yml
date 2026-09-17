@@ -101,13 +101,13 @@ criteria:
   W08: unknown
   W09: unknown
   G01: pass
-  G02: unknown
-  G03: unknown
-  G04: unknown
-  G05: unknown
-  G06: unknown
-  G07: unknown
-  G08: unknown
+  G02: pass
+  G03: pass
+  G04: na
+  G05: pass
+  G06: pass
+  G07: pass
+  G08: na
   L01: unknown
   L02: unknown
   L03: unknown
