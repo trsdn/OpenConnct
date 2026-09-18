@@ -8,6 +8,42 @@ permissions:
   contents: read
 
 jobs:
+  naming-consistency:
+    name: Naming consistency
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # The project was renamed from OpenConnect to OpenConnct (the original
+      # name was already taken). These files intentionally still say
+      # "OpenConnect" for migration/legacy-compat reasons, or to explain the
+      # rename itself (see AGENTS.md and docs/self-assessment.md) — anywhere
+      # else, it's a reintroduced typo. git grep only sees tracked files, so
+      # this matches exactly what a fresh checkout (like this one) contains.
+      - name: No stray "OpenConnect" references
+        run: |
+          set -euo pipefail
+          allowed="
+          README.md
+          AGENTS.md
+          .github/workflows/ci.yml
+          App/OpenConnctApp/Persistence/AppSupport.swift
+          App/OpenConnctApp/Resources/install-driver.sh
+          scripts/install_driver_dev.sh
+          scripts/uninstall_driver.sh
+          scripts/make_pkg.sh
+          "
+          status=0
+          while IFS= read -r path; do
+            [ -z "$path" ] && continue
+            if ! grep -qxF "$path" <<<"$allowed"; then
+              echo "::error file=$path::references \"OpenConnect\" but is not on the documented legacy-compat allowlist in this workflow"
+              status=1
+            fi
+          done < <(git grep -lI "OpenConnect" || true)
+          exit "$status"
+
   core:
     name: Swift package
     runs-on: macos-latest
