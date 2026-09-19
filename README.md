@@ -631,6 +631,10 @@ git tag -a vX.Y.Z -m "OpenConnct vX.Y.Z — <summary>" && git push origin vX.Y.Z
 scripts/request.sh openconnct vX.Y.Z --publish
 ```
 
+Add a `CHANGELOG.md` entry for the version **before** tagging: the broker
+publishes that entry as the release notes and refuses to publish a version that
+has none, or while anything is still listed under *Unreleased*.
+
 The broker stamps the tag's version into the app and driver. The signing job
 waits for an approval. `--publish` then uploads these files to the GitHub
 release:
