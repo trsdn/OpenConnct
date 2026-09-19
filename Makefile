@@ -30,13 +30,18 @@ DSP_OBJ_DIR    = $(DIST_DIR)/obj
 # for why this is a real dependency rather than source compiled straight into
 # the app like Core/Sources/OpenConnctControl).
 UPDATE_DIR     = Update
-# `.build/release` is SwiftPM's stable symlink to the products directory. The
-# directory it points at, and the object names inside it, both changed with the
-# Swift 6.4 toolchain (.build/apple/Products/Release + <Name>_Module.o became
-# .build/out/Products/Release + <Name>.o), so each object is resolved to
-# whichever spelling exists. Lazily expanded (=): it must be read after
+# Where SwiftPM writes the Update package's products depends on the toolchain:
+#   Swift <= 6.3   .build/apple/Products/Release/<Name>_Module.o
+#   Swift 6.4      .build/out/Products/Release/<Name>.o
+# (`.build/release` is not a way round it: on the older layout it does not lead
+# to the products, which is what broke CI once.) Both are probed, newest layout
+# first, and the directory is taken from whichever holds the compiled module, so
+# a machine that has been through a toolchain upgrade and still has the old
+# directory picks the current one. Lazily expanded (=): it must be read after
 # update-deps has produced the files, not when the Makefile is parsed.
-UPDATE_BUILD   = $(UPDATE_DIR)/.build/release
+UPDATE_BUILD   = $(patsubst %/OpenConnctUpdate.swiftmodule,%,$(firstword $(wildcard \
+                   $(UPDATE_DIR)/.build/out/Products/Release/OpenConnctUpdate.swiftmodule \
+                   $(UPDATE_DIR)/.build/apple/Products/Release/OpenConnctUpdate.swiftmodule)))
 update_obj     = $(firstword $(wildcard $(UPDATE_BUILD)/$(1)_Module.o $(UPDATE_BUILD)/$(1).o))
 UPDATE_OBJS    = $(call update_obj,OpenConnctUpdate) \
                  $(call update_obj,AppUpdater) \
