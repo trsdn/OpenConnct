@@ -21,7 +21,7 @@
 # record, then regenerate. Never the other way round.
 
 standard_version: "1.12.0"
-assessed_on: "2026-09-17"
+assessed_on: "2026-09-19"
 state: "Needs work"
 evidence: "docs/self-assessment.md"
 
@@ -91,15 +91,15 @@ criteria:
   T03: unknown
   T04: unknown
   T05: unknown
-  W01: unknown
-  W02: unknown
-  W03: unknown
-  W04: unknown
+  W01: pass
+  W02: pass
+  W03: pass
+  W04: pass
   W05: unknown
   W06: unknown
-  W07: unknown
-  W08: unknown
-  W09: unknown
+  W07: pass
+  W08: pass
+  W09: pass
   G01: pass
   G02: pass
   G03: pass
