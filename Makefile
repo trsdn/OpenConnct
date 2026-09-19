@@ -30,10 +30,17 @@ DSP_OBJ_DIR    = $(DIST_DIR)/obj
 # for why this is a real dependency rather than source compiled straight into
 # the app like Core/Sources/OpenConnctControl).
 UPDATE_DIR     = Update
-UPDATE_BUILD   = $(UPDATE_DIR)/.build/apple/Products/Release
-UPDATE_OBJS    = $(UPDATE_BUILD)/OpenConnctUpdate_Module.o \
-                 $(UPDATE_BUILD)/AppUpdater_Module.o \
-                 $(UPDATE_BUILD)/Version_Module.o
+# `.build/release` is SwiftPM's stable symlink to the products directory. The
+# directory it points at, and the object names inside it, both changed with the
+# Swift 6.4 toolchain (.build/apple/Products/Release + <Name>_Module.o became
+# .build/out/Products/Release + <Name>.o), so each object is resolved to
+# whichever spelling exists. Lazily expanded (=): it must be read after
+# update-deps has produced the files, not when the Makefile is parsed.
+UPDATE_BUILD   = $(UPDATE_DIR)/.build/release
+update_obj     = $(firstword $(wildcard $(UPDATE_BUILD)/$(1)_Module.o $(UPDATE_BUILD)/$(1).o))
+UPDATE_OBJS    = $(call update_obj,OpenConnctUpdate) \
+                 $(call update_obj,AppUpdater) \
+                 $(call update_obj,Version)
 
 all: driver build
 
