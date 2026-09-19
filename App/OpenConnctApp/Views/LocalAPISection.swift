@@ -7,7 +7,7 @@ import SwiftUI
 /// Monitoring note above it: the reader should be able to decide without
 /// knowing what a loopback interface is.
 struct LocalAPISection: View {
-    @EnvironmentObject var api: LocalAPIController
+    @ObservedObject var api: LocalAPIController
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
