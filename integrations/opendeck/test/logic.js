@@ -74,6 +74,20 @@ check("a key whose microphone is not in the list says so instead of guessing", (
     assert.deepEqual(face, { state: 2, title: "?" });
 });
 
+check("a key can carry its own label instead of the microphone's long name", () => {
+    const s = state([mic(0, "RØDE NT-USB Mini")]);
+    const face = keyFace("com.trsdn.openconnct.mute", { name: "RØDE NT-USB Mini", label: "NT-USB" }, s);
+    assert.equal(face.title, "NT-USB");
+    // A blank label is "no label", not an empty title.
+    assert.equal(keyFace("com.trsdn.openconnct.mute", { name: "RØDE NT-USB Mini", label: "  " }, s).title, "RØDE NT-USB…");
+});
+
+check("a label does not hide that the microphone is unplugged", () => {
+    const s = state([mic(0, "Desk", { present: false })]);
+    const face = keyFace("com.trsdn.openconnct.mute", { name: "Desk", label: "Mine" }, s);
+    assert.deepEqual(face, { state: 2, title: "Mine" });
+});
+
 // MARK: - What a gain key shows
 
 check("a gain key shows the current gain with its sign", () => {

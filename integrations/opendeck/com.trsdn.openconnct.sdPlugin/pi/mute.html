@@ -7,11 +7,15 @@
 <body>
     <label for="microphone">Microphone</label>
     <select id="microphone"></select>
+
+    <label for="label">Label on the key (optional)</label>
+    <input id="label" type="text" maxlength="12" placeholder="Defaults to the microphone's name">
     <p class="note" id="note"></p>
 
     <script src="inspector.js"></script>
     <script>
         const select = document.getElementById("microphone");
+        const label = document.getElementById("label");
         const note = document.getElementById("note");
 
         OpenConnctPI.ready(({ settings, options }) => {
@@ -20,7 +24,11 @@
                 ? "The key turns red while the microphone is muted, and grey while it is unplugged."
                 : "OpenConnct is not reachable, so there are no microphones to list yet. Switch on “Control from other apps” in its Technical details.";
             note.className = options.running ? "note" : "note warning";
+            // Not while the field has focus: a settings round trip would put the
+            // saved text back under the cursor mid-typing.
+            if (document.activeElement !== label) label.value = settings.label ?? "";
             select.onchange = () => OpenConnctPI.save({ name: select.value });
+            label.oninput = () => OpenConnctPI.save({ label: label.value });
         });
     </script>
 </body>
