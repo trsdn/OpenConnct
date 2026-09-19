@@ -47,6 +47,10 @@ public protocol LocalAPIBackend: AnyObject {
     func apiSetMuted(channel: Int, muted: Bool) -> Bool
     func apiToggleMute(channel: Int) -> Bool
     func apiSetGainDB(channel: Int, gainDB: Float) -> Bool
+    func apiSetSoloed(channel: Int, soloed: Bool) -> Bool
+    func apiToggleSolo(channel: Int) -> Bool
+    func apiSetFaderDB(channel: Int, faderDB: Float) -> Bool
+    func apiToggleEffect(channel: Int, effect: LocalAPIEffect) -> Bool
     func apiStartEngine()
     func apiStopEngine()
 }
@@ -83,6 +87,26 @@ public enum LocalAPIDispatcher {
                   body.gainDB.isFinite
             else { return .error(400, "expected {\"gainDB\": <number>}") }
             guard backend.apiSetGainDB(channel: channel, gainDB: body.gainDB) else {
+                return .error(404, "no such channel")
+            }
+        case .setSolo(let channel):
+            guard let body = try? JSONDecoder().decode(LocalAPISoloBody.self, from: request.body) else {
+                return .error(400, "expected {\"soloed\": true|false}")
+            }
+            guard backend.apiSetSoloed(channel: channel, soloed: body.soloed) else {
+                return .error(404, "no such channel")
+            }
+        case .toggleSolo(let channel):
+            guard backend.apiToggleSolo(channel: channel) else { return .error(404, "no such channel") }
+        case .setFader(let channel):
+            guard let body = try? JSONDecoder().decode(LocalAPIFaderBody.self, from: request.body),
+                  body.faderDB.isFinite
+            else { return .error(400, "expected {\"faderDB\": <number>}") }
+            guard backend.apiSetFaderDB(channel: channel, faderDB: body.faderDB) else {
+                return .error(404, "no such channel")
+            }
+        case .toggleEffect(let channel, let effect):
+            guard backend.apiToggleEffect(channel: channel, effect: effect) else {
                 return .error(404, "no such channel")
             }
         case .startEngine:

@@ -17,13 +17,39 @@ public struct LocalAPIChannelState: Codable, Equatable {
     /// itself out rather than mute a device that is no longer there.
     public let present: Bool
 
-    public init(index: Int, name: String, active: Bool, muted: Bool, gainDB: Float, present: Bool) {
+    /// Whether this channel is soloed. Solo silences every other channel, which
+    /// is why `active` can be false on a channel that is not itself muted.
+    public let soloed: Bool
+    /// The channel's fader in decibels: the level it contributes to the mix.
+    /// Not `gainDB`, which is the microphone's input gain before any of that.
+    public let faderDB: Float
+    /// `"off"`, `"75"`, `"150"` or `"variable"`.
+    public let highPass: String
+    public let gate: Bool
+    public let compressor: Bool
+    public let exciter: Bool
+    public let bassEnhancer: Bool
+    public let pad: Bool
+
+    public init(
+        index: Int, name: String, active: Bool, muted: Bool, gainDB: Float, present: Bool,
+        soloed: Bool = false, faderDB: Float = 0, highPass: String = "off", gate: Bool = false,
+        compressor: Bool = false, exciter: Bool = false, bassEnhancer: Bool = false, pad: Bool = false
+    ) {
         self.index = index
         self.name = name
         self.active = active
         self.muted = muted
         self.gainDB = gainDB
         self.present = present
+        self.soloed = soloed
+        self.faderDB = faderDB
+        self.highPass = highPass
+        self.gate = gate
+        self.compressor = compressor
+        self.exciter = exciter
+        self.bassEnhancer = bassEnhancer
+        self.pad = pad
     }
 }
 

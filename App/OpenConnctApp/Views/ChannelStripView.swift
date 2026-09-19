@@ -9,8 +9,8 @@ import SwiftUI
 // This gives comfortable resolution around typical speech levels
 // while still allowing up to +12 dB boost.
 
-private let faderMin: Float = -60
-private let faderMax: Float = 12
+private let faderMin: Float = faderRangeDB.lowerBound
+private let faderMax: Float = faderRangeDB.upperBound
 private let faderUnityNorm: Float = 0.80
 
 private func faderNorm(_ db: Float) -> Float {

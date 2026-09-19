@@ -27,4 +27,21 @@ final class LocalAPIStateTests: XCTestCase {
         XCTAssertEqual(channels[0]["gainDB"] as? Double, 0.8)
         XCTAssertEqual(channels[0]["present"] as? Bool, true)
     }
+
+    func testEncodesTheMixerFields() throws {
+        let channel = LocalAPIChannelState(
+            index: 1, name: "Boom", active: true, muted: false, gainDB: 3, present: true,
+            soloed: true, faderDB: -6, highPass: "75", gate: true, compressor: false,
+            exciter: false, bassEnhancer: true, pad: false)
+        let data = try JSONEncoder().encode(channel)
+        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        XCTAssertEqual(json["soloed"] as? Bool, true)
+        XCTAssertEqual(json["faderDB"] as? Double, -6)
+        XCTAssertEqual(json["highPass"] as? String, "75")
+        XCTAssertEqual(json["gate"] as? Bool, true)
+        XCTAssertEqual(json["compressor"] as? Bool, false)
+        XCTAssertEqual(json["exciter"] as? Bool, false)
+        XCTAssertEqual(json["bassEnhancer"] as? Bool, true)
+        XCTAssertEqual(json["pad"] as? Bool, false)
+    }
 }

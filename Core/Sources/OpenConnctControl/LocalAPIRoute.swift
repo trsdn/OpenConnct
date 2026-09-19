@@ -1,5 +1,16 @@
 import Foundation
 
+/// A switchable stage in a channel's chain. The raw value is the name used in
+/// the URL: `POST /v1/channel/{i}/effect/{name}/toggle`.
+public enum LocalAPIEffect: String, Equatable, CaseIterable {
+    case highPass = "highpass"
+    case gate
+    case compressor
+    case exciter
+    case bassEnhancer = "bass"
+    case pad
+}
+
 /// The closed set of endpoints this API answers (issue #8). Not a general
 /// router: the paths are fixed and few, so matching them is a fixed set of
 /// comparisons rather than a pattern language nothing else here would ever
@@ -9,6 +20,10 @@ public enum LocalAPIRoute: Equatable {
     case setMute(channel: Int)
     case toggleMute(channel: Int)
     case setGain(channel: Int)
+    case setSolo(channel: Int)
+    case toggleSolo(channel: Int)
+    case setFader(channel: Int)
+    case toggleEffect(channel: Int, effect: LocalAPIEffect)
     case startEngine
     case stopEngine
 
@@ -32,10 +47,19 @@ public enum LocalAPIRoute: Equatable {
               let channel = Int(segments[2]), channel >= 0
         else { return nil }
 
-        switch Array(segments[3...]) {
+        let rest = Array(segments[3...])
+        if rest.count == 3, rest[0] == "effect", rest[2] == "toggle" {
+            guard let effect = LocalAPIEffect(rawValue: rest[1]) else { return nil }
+            return .toggleEffect(channel: channel, effect: effect)
+        }
+
+        switch rest {
         case ["mute"]: return .setMute(channel: channel)
         case ["mute", "toggle"]: return .toggleMute(channel: channel)
         case ["gain"]: return .setGain(channel: channel)
+        case ["solo"]: return .setSolo(channel: channel)
+        case ["solo", "toggle"]: return .toggleSolo(channel: channel)
+        case ["fader"]: return .setFader(channel: channel)
         default: return nil
         }
     }

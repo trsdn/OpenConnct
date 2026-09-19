@@ -30,6 +30,22 @@ private final class FakeBackend: LocalAPIBackend {
         calls.append("gain \(channel) \(gainDB)")
         return true
     }
+    func apiSetSoloed(channel: Int, soloed: Bool) -> Bool {
+        guard channels.indices.contains(channel) else { return false }
+        calls.append("solo \(channel) \(soloed)"); return true
+    }
+    func apiToggleSolo(channel: Int) -> Bool {
+        guard channels.indices.contains(channel) else { return false }
+        calls.append("solo-toggle \(channel)"); return true
+    }
+    func apiSetFaderDB(channel: Int, faderDB: Float) -> Bool {
+        guard channels.indices.contains(channel) else { return false }
+        calls.append("fader \(channel) \(faderDB)"); return true
+    }
+    func apiToggleEffect(channel: Int, effect: LocalAPIEffect) -> Bool {
+        guard channels.indices.contains(channel) else { return false }
+        calls.append("effect \(channel) \(effect.rawValue)"); return true
+    }
     func apiStartEngine() { calls.append("start"); engineRunning = true }
     func apiStopEngine() { calls.append("stop"); engineRunning = false }
 }
@@ -142,5 +158,57 @@ final class LocalAPIDispatcherTests: XCTestCase {
         XCTAssertTrue(text.contains("Content-Length: 13\r\n"))
         XCTAssertTrue(text.contains("Connection: close\r\n"))
         XCTAssertTrue(text.hasSuffix("\r\n\r\n{\"error\":\"x\"}"))
+    }
+
+    func testSoloIsPassedThroughAndAnswersWithTheState() {
+        let backend = FakeBackend()
+        let r = LocalAPIDispatcher.handle(
+            request("POST", "/v1/channel/1/solo", body: "{\"soloed\":true}"), token: token, backend: backend)
+        XCTAssertEqual(r.status, 200)
+        XCTAssertEqual(backend.calls, ["solo 1 true"])
+    }
+
+    func testSoloWithAMalformedBodyChangesNothing() {
+        let backend = FakeBackend()
+        let r = LocalAPIDispatcher.handle(
+            request("POST", "/v1/channel/1/solo", body: "{}"), token: token, backend: backend)
+        XCTAssertEqual(r.status, 400)
+        XCTAssertTrue(backend.calls.isEmpty)
+    }
+
+    func testSoloToggle() {
+        let backend = FakeBackend()
+        XCTAssertEqual(LocalAPIDispatcher.handle(request("POST", "/v1/channel/0/solo/toggle"), token: token, backend: backend).status, 200)
+        XCTAssertEqual(backend.calls, ["solo-toggle 0"])
+    }
+
+    func testFaderIsPassedThroughInDecibels() {
+        let backend = FakeBackend()
+        let r = LocalAPIDispatcher.handle(
+            request("POST", "/v1/channel/0/fader", body: "{\"faderDB\":-12.5}"), token: token, backend: backend)
+        XCTAssertEqual(r.status, 200)
+        XCTAssertEqual(backend.calls, ["fader 0 -12.5"])
+    }
+
+    func testFaderThatIsNotAFiniteNumberIsRejected() {
+        let backend = FakeBackend()
+        let r = LocalAPIDispatcher.handle(
+            request("POST", "/v1/channel/0/fader", body: "{\"faderDB\":1e999}"), token: token, backend: backend)
+        XCTAssertEqual(r.status, 400)
+        XCTAssertTrue(backend.calls.isEmpty)
+    }
+
+    func testEffectToggleReachesTheBackendWithTheEffect() {
+        let backend = FakeBackend()
+        let r = LocalAPIDispatcher.handle(
+            request("POST", "/v1/channel/1/effect/highpass/toggle"), token: token, backend: backend)
+        XCTAssertEqual(r.status, 200)
+        XCTAssertEqual(backend.calls, ["effect 1 highpass"])
+    }
+
+    func testEffectToggleOnAChannelThatDoesNotExistGets404() {
+        let r = LocalAPIDispatcher.handle(
+            request("POST", "/v1/channel/9/effect/gate/toggle"), token: token, backend: FakeBackend())
+        XCTAssertEqual(r.status, 404)
     }
 }

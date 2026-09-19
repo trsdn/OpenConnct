@@ -1,5 +1,10 @@
 import Foundation
 
+/// The range of a channel's fader, in decibels. One definition, used by the fader
+/// itself and by the local API, so the two cannot disagree about where the
+/// fader ends.
+let faderRangeDB: ClosedRange<Float> = -60...12
+
 /// High-pass filter mode. Mirrors `oc_hpf_mode` in the DSP core.
 enum HPFMode: Int, Codable, CaseIterable, Identifiable {
     case off = 0

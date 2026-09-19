@@ -716,7 +716,15 @@ extension ParameterStore: LocalAPIBackend {
                     active: present && !isEffectivelyMuted(settings),
                     muted: settings.muted,
                     gainDB: settings.gainDB,
-                    present: present)
+                    present: present,
+                    soloed: settings.soloed,
+                    faderDB: settings.faderDB,
+                    highPass: Self.apiName(of: settings.hpfMode),
+                    gate: settings.gateEnabled,
+                    compressor: settings.compressorEnabled,
+                    exciter: settings.exciterEnabled,
+                    bassEnhancer: settings.bassEnhancerEnabled,
+                    pad: settings.padEnabled)
             })
     }
 
@@ -738,6 +746,52 @@ extension ParameterStore: LocalAPIBackend {
         let range = gainRange(for: uid)
         update(uid) { $0.gainDB = min(max(gainDB, range.lowerBound), range.upperBound) }
         return true
+    }
+
+    func apiSetSoloed(channel: Int, soloed: Bool) -> Bool {
+        guard channels.indices.contains(channel) else { return false }
+        update(channels[channel].deviceUID) { $0.soloed = soloed }
+        return true
+    }
+
+    func apiToggleSolo(channel: Int) -> Bool {
+        guard channels.indices.contains(channel) else { return false }
+        update(channels[channel].deviceUID) { $0.soloed.toggle() }
+        return true
+    }
+
+    func apiSetFaderDB(channel: Int, faderDB: Float) -> Bool {
+        guard channels.indices.contains(channel) else { return false }
+        let clamped = min(max(faderDB, faderRangeDB.lowerBound), faderRangeDB.upperBound)
+        update(channels[channel].deviceUID) { $0.faderDB = clamped }
+        return true
+    }
+
+    func apiToggleEffect(channel: Int, effect: LocalAPIEffect) -> Bool {
+        guard channels.indices.contains(channel) else { return false }
+        update(channels[channel].deviceUID) { settings in
+            switch effect {
+            case .highPass:
+                // Off, or on at the first setting. A key cannot choose among
+                // the three, and 75 Hz is the gentle one that suits speech.
+                settings.hpfMode = settings.hpfMode == .off ? .hz75 : .off
+            case .gate: settings.gateEnabled.toggle()
+            case .compressor: settings.compressorEnabled.toggle()
+            case .exciter: settings.exciterEnabled.toggle()
+            case .bassEnhancer: settings.bassEnhancerEnabled.toggle()
+            case .pad: settings.padEnabled.toggle()
+            }
+        }
+        return true
+    }
+
+    private static func apiName(of mode: HPFMode) -> String {
+        switch mode {
+        case .off: return "off"
+        case .hz75: return "75"
+        case .hz150: return "150"
+        case .continuous: return "variable"
+        }
     }
 
     func apiStartEngine() { engine?.start() }

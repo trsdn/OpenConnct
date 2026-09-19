@@ -12,3 +12,16 @@ public struct LocalAPIGainBody: Codable, Equatable {
     public let gainDB: Float
     public init(gainDB: Float) { self.gainDB = gainDB }
 }
+
+/// Body of `POST /v1/channel/{i}/solo`.
+public struct LocalAPISoloBody: Codable, Equatable {
+    public let soloed: Bool
+    public init(soloed: Bool) { self.soloed = soloed }
+}
+
+/// Body of `POST /v1/channel/{i}/fader`: the channel's level in the mix, in
+/// decibels, not the microphone's input gain.
+public struct LocalAPIFaderBody: Codable, Equatable {
+    public let faderDB: Float
+    public init(faderDB: Float) { self.faderDB = faderDB }
+}
