@@ -31,6 +31,7 @@ whatever app consumes the resulting virtual device.
 | `scripts/` | Build, packaging, signing, notarization, install/uninstall shell scripts |
 | `tools/` | Standalone diagnostic binaries (bench, probe, driver harness) — not shipped |
 | `docs/` | Verification runbooks and design docs |
+| `integrations/opendeck/` | The OpenDeck / Stream Deck plugin (plain Node, no dependencies). `npm test` there runs its four suites; `./install.sh` copies it into the deck apps |
 | `site/` | The GitHub Pages landing page: static HTML/CSS, no scripts, no third-party requests. `scripts/build_site.sh` fills in the release version and date; `.github/workflows/pages.yml` deploys it |
 | `.github/workflows/` | CI (build, test, naming guard) and the Pages deploy. There is no release workflow: releases come only from the notarization broker (see `README.md`, "Releasing") |
 
@@ -74,7 +75,7 @@ via `dlopen`, no install needed). Verified 2026-09-17: 185 + 384 assertions,
 
 `make test-driver` is the only automated check of driver *behavior* — installing
 it for real needs `sudo` and a `coreaudiod` restart, which no CI or agent
-sandbox should do (see "Do not do these"). If you touched the app or driver
+sandbox should do (see "Do not do these"). If you touched `integrations/opendeck/`, run `npm test` there. If you touched the app or driver
 target rather than `Core/`, also run `make build UNIVERSAL=1` — this compiles
 both architectures and is what would first catch a break `test-all` alone
 cannot, matching what `.github/workflows/ci.yml` does for the `build` job.

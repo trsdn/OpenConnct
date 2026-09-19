@@ -1,0 +1,71 @@
+{
+  "$schema": "https://schemas.elgato.com/streamdeck/plugins/manifest.json",
+  "Name": "OpenConnct",
+  "UUID": "com.trsdn.openconnct",
+  "Author": "Torsten Mahr",
+  "Version": "0.1.0.0",
+  "Icon": "icons/plugin",
+  "Category": "OpenConnct",
+  "CategoryIcon": "icons/category",
+  "CodePath": "plugin.js",
+  "Nodejs": {
+    "Version": "20"
+  },
+  "OS": [
+    {
+      "Platform": "mac",
+      "MinimumVersion": "13.0"
+    }
+  ],
+  "SDKVersion": 2,
+  "Software": {
+    "MinimumVersion": "6.4"
+  },
+  "Description": "Mute microphones and set their gain in OpenConnct from a Stream Deck. Keys show what OpenConnct is actually doing, including changes made in the app window.",
+  "Actions": [
+    {
+      "Name": "Toggle mute",
+      "UUID": "com.trsdn.openconnct.mute",
+      "Icon": "icons/mic",
+      "Tooltip": "Mutes or unmutes one microphone. The key turns red while the microphone is muted and grey while it is unplugged.",
+      "Controllers": [
+        "Keypad"
+      ],
+      "PropertyInspectorPath": "pi/mute.html",
+      "DisableAutomaticStates": true,
+      "States": [
+        {
+          "Image": "icons/mic-live",
+          "Name": "Live",
+          "TitleAlignment": "bottom"
+        },
+        {
+          "Image": "icons/mic-muted",
+          "Name": "Muted",
+          "TitleAlignment": "bottom"
+        },
+        {
+          "Image": "icons/mic-unavailable",
+          "Name": "Unavailable",
+          "TitleAlignment": "bottom"
+        }
+      ]
+    },
+    {
+      "Name": "Gain",
+      "UUID": "com.trsdn.openconnct.gain",
+      "Icon": "icons/gain",
+      "Tooltip": "Raises or lowers one microphone's gain by a fixed step. The key shows the current gain in decibels.",
+      "Controllers": [
+        "Keypad"
+      ],
+      "PropertyInspectorPath": "pi/gain.html",
+      "States": [
+        {
+          "Image": "icons/gain",
+          "TitleAlignment": "bottom"
+        }
+      ]
+    }
+  ]
+}

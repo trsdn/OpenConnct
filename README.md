@@ -378,6 +378,9 @@ request to learn what its own request did:
 }
 ```
 
+An OpenDeck / Stream Deck plugin that uses exactly this API, with keys that turn
+red while a microphone is muted, lives in [`integrations/opendeck`](integrations/opendeck).
+
 `present` is false when the microphone is unplugged, so a deck button can grey
 out instead of switching a channel that is not there. `active` means the
 channel is contributing to the mix right now: present, and not silenced by its

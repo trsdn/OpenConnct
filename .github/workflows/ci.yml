@@ -44,6 +44,24 @@ jobs:
           done < <(git grep -lI "OpenConnect" || true)
           exit "$status"
 
+  opendeck-plugin:
+    name: OpenDeck plugin
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Node 20 is the oldest Stream Deck runs plugins with, so it is the
+      # strictest place to test them.
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Test the plugin
+        working-directory: integrations/opendeck
+        run: npm test
+
   core:
     name: Swift package
     runs-on: macos-latest
