@@ -8,38 +8,41 @@
     <label for="microphone">Microphone</label>
     <select id="microphone"></select>
 
-    <label for="step">Each press changes the gain by</label>
-    <select id="step">
-        <option value="-6">−6 dB</option>
-        <option value="-3">−3 dB</option>
-        <option value="-1">−1 dB</option>
-        <option value="1">+1 dB</option>
-        <option value="3">+3 dB</option>
-        <option value="6">+6 dB</option>
+    <label for="effect">Filter</label>
+    <select id="effect">
+        <option value="">Choose a filter…</option>
+        <option value="highpass">High-pass filter</option>
+        <option value="gate">Noise gate</option>
+        <option value="compressor">Compressor</option>
+        <option value="exciter">Exciter</option>
+        <option value="bass">Bass enhancer</option>
+        <option value="pad">Pad</option>
     </select>
 
     <label for="label">Label on the key (optional)</label>
-    <input id="label" type="text" maxlength="12" placeholder="Shown above the gain">
+    <input id="label" type="text" maxlength="12" placeholder="Defaults to the microphone's name">
     <p class="note" id="note"></p>
 
     <script src="inspector.js"></script>
     <script>
         const select = document.getElementById("microphone");
-        const step = document.getElementById("step");
         const label = document.getElementById("label");
         const note = document.getElementById("note");
+        const effect = document.getElementById("effect");
 
         OpenConnctPI.ready(({ settings, options }) => {
             fillSelect(select, options.channels, settings.name, "The only one found");
-            step.value = settings.step ?? "1";
+            effect.value = settings.effect ?? "";
+            // Not while the field has focus: a settings round trip would put the
+            // saved text back under the cursor mid-typing.
+            if (document.activeElement !== label) label.value = settings.label ?? "";
             note.textContent = options.running
-                ? "The key shows the microphone's current gain. Put one key on +, another on −."
+                ? "The key lights up while the filter is on. The high-pass filter switches between off and 75 Hz."
                 : "OpenConnct is not reachable, so there are no microphones to list yet. Switch on “Control from other apps” in OpenConnct's Settings (⌘,).";
             note.className = options.running ? "note" : "note warning";
             select.onchange = () => OpenConnctPI.save({ name: select.value });
-            step.onchange = () => OpenConnctPI.save({ step: step.value });
-            if (document.activeElement !== label) label.value = settings.label ?? "";
             label.oninput = () => OpenConnctPI.save({ label: label.value });
+            effect.onchange = () => OpenConnctPI.save({ effect: effect.value });
         });
     </script>
 </body>

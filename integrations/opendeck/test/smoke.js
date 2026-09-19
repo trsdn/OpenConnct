@@ -38,10 +38,14 @@ const supportDir = fs.mkdtempSync(path.join(os.tmpdir(), "openconnct-support-"))
 
 /** Every request the fake app received, in order. */
 const requests = [];
+const extras = () => ({
+    soloed: false, faderDB: -6, highPass: "off", gate: false, compressor: false,
+    exciter: false, bassEnhancer: false, pad: false,
+});
 let channels = [
-    { index: 0, name: "Desk", active: true, muted: false, gainDB: 3, present: true },
-    { index: 1, name: "Boom", active: true, muted: false, gainDB: 0, present: true },
-    { index: 2, name: "Spare", active: false, muted: true, gainDB: 0, present: false },
+    { index: 0, name: "Desk", active: true, muted: false, gainDB: 3, present: true, ...extras() },
+    { index: 1, name: "Boom", active: true, muted: false, gainDB: 0, present: true, ...extras() },
+    { index: 2, name: "Spare", active: false, muted: true, gainDB: 0, present: false, ...extras() },
 ];
 let acceptedToken = TOKEN;
 
@@ -62,7 +66,7 @@ function makeApp() {
             const body = text ? JSON.parse(text) : undefined;
             requests.push({ method: request.method, url: request.url, body, origin: request.headers.origin });
 
-            const [, , , index, verb, sub] = request.url.split("/");
+            const [, , , index, verb, sub, tail] = request.url.split("/");
             const channel = channels[Number(index)];
             if (request.method === "GET" && request.url === "/v1/state") return answer(response, 200, snapshot());
             if (!channel) return answer(response, 404, { error: "no such channel" });
@@ -71,6 +75,14 @@ function makeApp() {
                 channel.active = !channel.muted;
             } else if (verb === "gain") {
                 channel.gainDB = body.gainDB;
+            } else if (verb === "solo" && sub === "toggle") {
+                channel.soloed = !channel.soloed;
+            } else if (verb === "fader") {
+                channel.faderDB = body.faderDB;
+            } else if (verb === "effect" && tail === "toggle") {
+                const field = { highpass: "highPass", gate: "gate", compressor: "compressor", exciter: "exciter", bass: "bassEnhancer", pad: "pad" }[sub];
+                if (!field) return answer(response, 404, { error: "not found" });
+                channel[field] = field === "highPass" ? (channel.highPass === "off" ? "75" : "off") : !channel[field];
             }
             answer(response, 200, snapshot());
         });
@@ -221,8 +233,8 @@ check("a key follows its microphone by name when the order changes", async () =>
     await nextMessage(stateOf("boom", 0), "the boom key");
     // Another microphone was plugged in and Boom is no longer index 1.
     channels = [
-        { index: 0, name: "Boom", active: true, muted: false, gainDB: 0, present: true },
-        { index: 1, name: "Desk", active: true, muted: false, gainDB: 3, present: true },
+        { index: 0, name: "Boom", active: true, muted: false, gainDB: 0, present: true, ...extras() },
+        { index: 1, name: "Desk", active: true, muted: false, gainDB: 3, present: true, ...extras() },
         channels[2],
     ];
     channels[2].index = 2;
@@ -250,6 +262,70 @@ check("a gain key shows the current gain and adds its step on a press", async ()
     const post = requests.find((r) => r.method === "POST");
     assert.equal(post.url, `/v1/channel/${channels.findIndex((c) => c.name === "Desk")}/gain`);
     assert.equal(post.body.gainDB, 6);
+});
+
+const SOLO = "com.trsdn.openconnct.solo";
+const FADER = "com.trsdn.openconnct.fader";
+const EFFECT = "com.trsdn.openconnct.effect";
+const titleOf = (name) => (m) => m.event === "setTitle" && m.context === ctx(name);
+const lastTitle = (name) => fromPlugin.filter(titleOf(name)).at(-1)?.payload.title;
+
+check("a solo key lights up when its microphone is soloed, and a press reaches the app", async () => {
+    appear(SOLO, "solo", { name: "Desk" });
+    await nextMessage(stateOf("solo", 0), "the solo key");
+    requests.length = 0;
+    const since = fromPlugin.length;
+    press(SOLO, "solo", { name: "Desk" });
+    await nextMessage(stateOf("solo", 1), "the key to light", since);
+    const post = requests.find((r) => r.method === "POST");
+    assert.equal(post.url, `/v1/channel/${channels.findIndex((c) => c.name === "Desk")}/solo/toggle`);
+    press(SOLO, "solo", { name: "Desk" });
+    await settle();
+    assert.equal(channels.find((c) => c.name === "Desk").soloed, false, "a second press un-solos");
+});
+
+check("a level key shows the fader with the label above it, and a press moves the fader", async () => {
+    appear(FADER, "fader", { name: "Desk", step: "3", label: "Desk" });
+    await nextMessage((m) => titleOf("fader")(m) && m.payload.title === "Desk\n-6 dB", "the fader title");
+    requests.length = 0;
+    press(FADER, "fader", { name: "Desk", step: "3", label: "Desk" });
+    await settle();
+    const post = requests.find((r) => r.method === "POST");
+    assert.match(post.url, /\/fader$/);
+    assert.equal(post.body.faderDB, -3);
+    assert.equal(lastTitle("fader"), "Desk\n-3 dB");
+});
+
+check("a filter key names its filter, lights when it is on, and a press switches it", async () => {
+    appear(EFFECT, "gate", { name: "Desk", effect: "gate", label: "Desk" });
+    await nextMessage((m) => titleOf("gate")(m) && m.payload.title === "Noise gate\nDesk", "the filter title");
+    requests.length = 0;
+    const since = fromPlugin.length;
+    press(EFFECT, "gate", { name: "Desk", effect: "gate", label: "Desk" });
+    await nextMessage(stateOf("gate", 1), "the filter key to light", since);
+    assert.match(requests.find((r) => r.method === "POST").url, /\/effect\/gate\/toggle$/);
+});
+
+check("the high-pass key reads on for any setting and switches between off and on", async () => {
+    appear(EFFECT, "hpf", { name: "Boom", effect: "highpass" });
+    await nextMessage(stateOf("hpf", 0), "the high-pass key");
+    const since = fromPlugin.length;
+    press(EFFECT, "hpf", { name: "Boom", effect: "highpass" });
+    await nextMessage(stateOf("hpf", 1), "the key to light", since);
+    assert.equal(channels.find((c) => c.name === "Boom").highPass, "75");
+});
+
+check("a filter key that has not been told which filter refuses and switches nothing", async () => {
+    appear(EFFECT, "nofilter", { name: "Desk" });
+    await nextMessage(stateOf("nofilter", 2), "the unconfigured key");
+    // The title is its own message, sent just after the state: wait for it.
+    const title = await nextMessage(titleOf("nofilter"), "the unconfigured key's title");
+    assert.equal(title.payload.title, "Choose\nfilter");
+    requests.length = 0;
+    const since = fromPlugin.length;
+    press(EFFECT, "nofilter", { name: "Desk" });
+    await nextMessage((m) => m.event === "showAlert" && m.context === ctx("nofilter"), "an alert", since);
+    assert.equal(requests.filter((r) => r.method === "POST").length, 0);
 });
 
 check("a key bound to nothing refuses to guess when there are several microphones", async () => {

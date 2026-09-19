@@ -104,3 +104,6 @@ export async function request(method, pathname, body) {
 export const getState = () => request("GET", "/v1/state");
 export const toggleMute = (index) => request("POST", `/v1/channel/${index}/mute/toggle`);
 export const setGainDB = (index, gainDB) => request("POST", `/v1/channel/${index}/gain`, { gainDB });
+export const toggleSolo = (index) => request("POST", `/v1/channel/${index}/solo/toggle`);
+export const setFaderDB = (index, faderDB) => request("POST", `/v1/channel/${index}/fader`, { faderDB });
+export const toggleEffect = (index, effect) => request("POST", `/v1/channel/${index}/effect/${effect}/toggle`);

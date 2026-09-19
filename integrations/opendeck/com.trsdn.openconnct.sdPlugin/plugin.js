@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 import process from "node:process";
 
-import { getState, setGainDB, toggleMute } from "./api-client.js";
+import { getState, setFaderDB, setGainDB, toggleEffect, toggleMute, toggleSolo } from "./api-client.js";
 import { DeckSocket } from "./deck-socket.js";
-import { findChannel, keyFace, nextGainDB } from "./logic.js";
+import { EFFECTS, findChannel, keyFace, nextFaderDB, nextGainDB } from "./logic.js";
 
 /**
  * An OpenDeck plugin for OpenConnct.
@@ -166,6 +166,19 @@ async function press(context) {
             next = await setGainDB(channel.index, gain);
             break;
         }
+        case "com.trsdn.openconnct.solo":
+            next = await toggleSolo(channel.index);
+            break;
+        case "com.trsdn.openconnct.fader": {
+            const fader = nextFaderDB(key.settings, channel);
+            if (fader === null) throw new Error("This key's step is not a number");
+            next = await setFaderDB(channel.index, fader);
+            break;
+        }
+        case "com.trsdn.openconnct.effect":
+            if (!EFFECTS[key.settings.effect]) throw new Error("Choose which filter this key switches");
+            next = await toggleEffect(channel.index, key.settings.effect);
+            break;
         default:
             return;
     }

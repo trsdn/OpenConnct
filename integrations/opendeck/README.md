@@ -38,11 +38,23 @@ a symlink out of its plugins directory and fails at it silently.
 
 | Action | What a press does | What the key shows |
 | --- | --- | --- |
-| **Toggle mute** | Mutes or unmutes one microphone | Its name. White while live, red while muted, grey while unplugged |
-| **Gain** | Changes one microphone's gain by a fixed step (±1, ±3 or ±6 dB) | The current gain, for example `+3 dB` |
+| **Toggle mute** | Mutes or unmutes one microphone | Its label. White while live, red while muted or silenced by a solo, grey while unplugged |
+| **Solo** | Solos one microphone, which silences every other channel | Its label. Lit while soloed |
+| **Level** | Moves the microphone's **fader**, the level in the mix, by a fixed step (±1, ±3 or ±6 dB) | The label above the level, for example `NT-USB` over `-6 dB` |
+| **Gain** | Moves the microphone's **input gain** by a fixed step | The label above the gain, for example `NT-USB` over `+26 dB` |
+| **Filter** | Switches one stage on or off: high-pass filter, noise gate, compressor, exciter, bass enhancer or pad | The filter's name above the label. Lit while on |
+
+Level and Gain are two different controls, and it matters which one a key is on:
+the **fader** is the slider and number in each channel strip, so it is what you
+hear change. The **input gain** sits in front of all of that, in the
+microphone's own detail view, and turning it up on a channel whose fader is low
+changes nothing you can see or hear.
 
 Pick the microphone in the key's settings. The list is filled in live, so you
-choose by name. Put one Gain key on **+** and another on **−**.
+choose by name. Every key can carry a short **label**, shown as its title in the
+way the OpenLens keys name their light: microphones such as `RØDE NT-USB Mini` and
+`RØDE VideoMic NTG` share their first twelve characters, so without a label their
+keys look the same.
 
 A key is bound to a microphone by **name**, never by position: the mixer's order
 changes when a microphone is plugged in or removed, and a key that quietly moved
@@ -53,6 +65,23 @@ alert marker instead of guessing.
 A microphone that another channel's **solo** has silenced shows red as well: it is
 not muted, but nobody can hear it, and a key saying "live" over a silent
 microphone is the worst thing a mute key could say.
+
+A key that needs something the running OpenConnct does not have yet (Solo, Level
+and Filter need 0.4.0 or later) shows **Update OpenConnct** in grey instead of a
+guess.
+
+## A suggested layout
+
+Two pages of 15 keys, each with a home key and a key to the other page, laid out
+the way the OpenLens page is: one group per microphone, named by its label.
+
+- **Mix**: one column per microphone. Mute on top, Level +3 and −3 below it, and a
+  Solo key for each microphone in the fourth column.
+- **Setup**: one row per microphone: Gain −3, Gain +3, High-pass, Noise gate,
+  Compressor.
+
+The plugin does not create pages; they are ordinary OpenDeck profiles you fill
+by dragging actions from the **OpenConnct** category.
 
 ## When OpenConnct is not reachable
 
@@ -76,7 +105,7 @@ Four suites, all offline, with neither deck app nor OpenConnct installed:
 - **manifest**: every file it names exists, and it obeys the rules Elgato
   enforces and OpenDeck does not care about.
 - **deck-socket**: the WebSocket client against a stand-in server.
-- **logic**: which microphone a key means, what it shows, what a press asks for.
+- **logic**: which microphone a key means, what each kind of key shows, what a press asks for.
 - **smoke**: the plugin itself between a stand-in for a deck and a stand-in for
   OpenConnct, including a change made in the app repainting a key, the mixer
   reordering between a poll and a press, the app disappearing and coming back on

@@ -6,6 +6,18 @@ from the entry for the version being released.
 
 ## [Unreleased]
 
+### Added
+
+- **Solo, fader and filters over the local API.** `GET /v1/state` now reports each
+  channel's `soloed`, `faderDB`, `highPass`, `gate`, `compressor`, `exciter`,
+  `bassEnhancer` and `pad`. New calls: `POST /v1/channel/{i}/solo` (and
+  `/solo/toggle`), `POST /v1/channel/{i}/fader`, and
+  `POST /v1/channel/{i}/effect/{highpass|gate|compressor|exciter|bass|pad}/toggle`.
+  Until now the API could mute and set the input gain, but not move the fader you
+  actually see in the mixer.
+- **OpenDeck and Stream Deck plugin:** Solo, Level (fader) and Filter keys, and a
+  label on every key. Keys tell you when the app they talk to is too old.
+
 ## [0.3.1] - 2026-09-19
 
 ### Changed

@@ -341,8 +341,17 @@ curl -H "Authorization: Bearer $KEY" $API/v1/state
 curl -H "Authorization: Bearer $KEY" -X POST -d '{"muted":true}'  $API/v1/channel/0/mute
 curl -H "Authorization: Bearer $KEY" -X POST                      $API/v1/channel/0/mute/toggle
 curl -H "Authorization: Bearer $KEY" -X POST -d '{"gainDB":-6.5}' $API/v1/channel/0/gain
+curl -H "Authorization: Bearer $KEY" -X POST -d '{"soloed":true}'  $API/v1/channel/0/solo    # or /solo/toggle
+curl -H "Authorization: Bearer $KEY" -X POST -d '{"faderDB":-6}'   $API/v1/channel/0/fader
+curl -H "Authorization: Bearer $KEY" -X POST                      $API/v1/channel/0/effect/gate/toggle
 curl -H "Authorization: Bearer $KEY" -X POST                      $API/v1/engine/stop   # or /start
 ```
+
+`gain` is the microphone's input gain, set in its detail view; `fader` is the
+level in the mix, the slider and the number you see in each channel strip. The
+fader is clamped to its own range, −60 to +12 dB, and the gain to its slider.
+The effects are `highpass`, `gate`, `compressor`, `exciter`, `bass` and `pad`.
+Switching the high-pass filter on selects 75 Hz.
 
 Every call answers with the resulting state, so a client never needs a second
 request to learn what its own request did:
@@ -352,7 +361,11 @@ request to learn what its own request did:
   "driverInstalled": true,
   "engineRunning": true,
   "channels": [
-    { "index": 0, "name": "USB Microphone", "active": true, "muted": false, "gainDB": 3.0, "present": true }
+    {
+      "index": 0, "name": "USB Microphone", "active": true, "muted": false, "soloed": false,
+      "present": true, "gainDB": 3.0, "faderDB": -6.0, "highPass": "off",
+      "gate": true, "compressor": false, "exciter": false, "bassEnhancer": false, "pad": false
+    }
   ]
 }
 ```

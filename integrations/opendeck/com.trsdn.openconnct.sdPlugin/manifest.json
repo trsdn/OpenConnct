@@ -21,7 +21,7 @@
   "Software": {
     "MinimumVersion": "6.4"
   },
-  "Description": "Mute microphones and set their gain in OpenConnct from a Stream Deck. Keys show what OpenConnct is actually doing, including changes made in the app window.",
+  "Description": "Mute, solo and set the level and gain of microphones in OpenConnct, and switch their filters, from a Stream Deck. Keys show what OpenConnct is actually doing, including changes made in the app window.",
   "Actions": [
     {
       "Name": "Toggle mute",
@@ -63,6 +63,78 @@
       "States": [
         {
           "Image": "icons/gain",
+          "TitleAlignment": "bottom"
+        }
+      ]
+    },
+    {
+      "Name": "Solo",
+      "UUID": "com.trsdn.openconnct.solo",
+      "Icon": "icons/solo",
+      "Tooltip": "Solos one microphone: every other channel is silenced while it is on. The key is lit while the microphone is soloed.",
+      "Controllers": [
+        "Keypad"
+      ],
+      "PropertyInspectorPath": "pi/solo.html",
+      "DisableAutomaticStates": true,
+      "States": [
+        {
+          "Image": "icons/solo",
+          "Name": "Off",
+          "TitleAlignment": "bottom"
+        },
+        {
+          "Image": "icons/solo-on",
+          "Name": "On",
+          "TitleAlignment": "bottom"
+        },
+        {
+          "Image": "icons/solo-unavailable",
+          "Name": "Unavailable",
+          "TitleAlignment": "bottom"
+        }
+      ]
+    },
+    {
+      "Name": "Level",
+      "UUID": "com.trsdn.openconnct.fader",
+      "Icon": "icons/level",
+      "Tooltip": "Raises or lowers one microphone's level in the mix by a fixed step. This is the fader you see in each channel strip, not the input gain.",
+      "Controllers": [
+        "Keypad"
+      ],
+      "PropertyInspectorPath": "pi/fader.html",
+      "States": [
+        {
+          "Image": "icons/level",
+          "TitleAlignment": "bottom"
+        }
+      ]
+    },
+    {
+      "Name": "Filter",
+      "UUID": "com.trsdn.openconnct.effect",
+      "Icon": "icons/effect-off",
+      "Tooltip": "Switches one stage of a microphone's chain on or off: high-pass filter, noise gate, compressor, exciter, bass enhancer or pad. The key is lit while it is on.",
+      "Controllers": [
+        "Keypad"
+      ],
+      "PropertyInspectorPath": "pi/effect.html",
+      "DisableAutomaticStates": true,
+      "States": [
+        {
+          "Image": "icons/effect-off",
+          "Name": "Off",
+          "TitleAlignment": "bottom"
+        },
+        {
+          "Image": "icons/effect-on",
+          "Name": "On",
+          "TitleAlignment": "bottom"
+        },
+        {
+          "Image": "icons/effect-unavailable",
+          "Name": "Unavailable",
           "TitleAlignment": "bottom"
         }
       ]
