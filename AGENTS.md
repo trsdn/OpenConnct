@@ -32,7 +32,7 @@ whatever app consumes the resulting virtual device.
 | `tools/` | Standalone diagnostic binaries (bench, probe, driver harness) — not shipped |
 | `docs/` | Verification runbooks and design docs |
 | `integrations/opendeck/` | The OpenDeck / Stream Deck plugin (plain Node, no dependencies). `npm test` there runs its four suites; `./install.sh` copies it into the deck apps |
-| `site/` | The GitHub Pages landing page: static HTML/CSS, no scripts, no third-party requests. `scripts/build_site.sh` fills in the release version and date; `.github/workflows/pages.yml` deploys it |
+| `site/` | The GitHub Pages landing page: static HTML/CSS, no scripts, no third-party requests. `scripts/build_site.sh` fills in the build date; `.github/workflows/pages.yml` deploys it |
 | `.github/workflows/` | CI (build, test, naming guard) and the Pages deploy. There is no release workflow: releases come only from the notarization broker (see `README.md`, "Releasing") |
 
 Generated, never hand-edit:

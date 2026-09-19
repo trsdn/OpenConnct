@@ -1,7 +1,7 @@
 # Self-assessment against the trsdn Repository Quality Standard
 
 - Assessed on: 2026-09-19 (first pass 2026-09-17; Agent Readiness added the
-  same day; Published Site added 2026-09-19)
+  same day; Published Site added 2026-09-19; `W04` downgraded to partial the same day when the version number was removed from the page)
 - Standard version: [1.12.0](https://github.com/trsdn/.github/blob/v1.12.0/docs/repository-quality-standard.md)
 - State: **Needs work** — not because a known gap remains open, but because
   most criteria below are still `unknown`. A record with this much unassessed
@@ -58,9 +58,9 @@ standard 1.12.0 and are not assessed.
 |---|---|---|
 | `W01` | pass | `site/` is committed; `.github/workflows/pages.yml` deploys it with GitHub's own Pages actions on changes to `site/`, on a published release, and weekly; `scripts/build_site.sh` is the documented, repeatable build |
 | `W02` | pass | the repository homepage field is the site URL, and the site links back from the header ("Source on GitHub") and the footer |
-| `W03` | pass | the first view states the name, that it mixes several USB microphones into one virtual input for Teams, Zoom and OBS, and the status ("Version 0.1.0, maintained") with a download button, before any scrolling |
-| `W04` | pass | name and one-sentence purpose; status and version; what it does, with a real screenshot of the app; how to get it; the `Y01` disclosure ("collects nothing … no analytics or telemetry"); links to the repository, licence, security policy and issues; and the date the page was built |
-| `W07` | pass | network review: `site/index.html` and `site/style.css` contain no `<script>`, no external `src`/`href`/`url()`/`@import`, no web fonts and no preconnects; the only resources are `style.css`, `assets/icon.png` and `assets/mixer.png`, all same-origin, and all four were fetched from the live site. No cookies are set (there is no script and no server code). The version and date are injected at build time so the browser never has to ask another host |
+| `W03` | pass | the first view states the name, that it mixes several USB microphones into one virtual input for Teams, Zoom and OBS, and the status ("Maintained. Needs macOS 13 or later.") with a download button, before any scrolling |
+| `W04` | partial | everything in the content baseline is there (name and one-sentence purpose, status, what it does with a real screenshot, how to get it, the `Y01` disclosure, links to the repository, licence, security policy and issues, the date the page was built) **except the version**: the standard asks the page to say which release it describes. That is left out on purpose, so that publishing a release never requires a change to the site; the download button points at the latest release instead |
+| `W07` | pass | network review: `site/index.html` and `site/style.css` contain no `<script>`, no external `src`/`href`/`url()`/`@import`, no web fonts and no preconnects; the only resources are `style.css`, `assets/icon.png` and `assets/mixer.png`, all same-origin, and all four were fetched from the live site. No cookies are set (there is no script and no server code). The build date is injected at build time so the browser never has to ask another host |
 | `W08` | pass | each fact appears once and depth stays in the repository: no architecture, changelog, contribution or decision-record content on the page |
 | `W09` | pass | made for this project rather than left at a template default: palette taken from the app's own `Theme.swift`, one bespoke figure (two clocks drifting apart versus staying locked) built for the idea the project exists for, no framework or generator |
 
