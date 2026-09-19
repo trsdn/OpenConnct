@@ -691,6 +691,59 @@ final class ParameterStore: ObservableObject {
     }
 }
 
+// MARK: - Local API backend
+//
+// Lives in this file, not its own, because `engine` is private and the API
+// must reach the mixer only through this type — the same door the interface
+// uses. Every mutation goes through `update`, so persistence, solo arithmetic
+// and the parameter queue behave exactly as they do for a click.
+extension ParameterStore: LocalAPIBackend {
+    func apiState() -> LocalAPIStateResponse {
+        // Reads the value the meter poll already published. Calling
+        // `engine.diagnostics()` here would be wrong: it is read-and-clear, so
+        // a request would steal an interval from the interface's own reading.
+        let diagnostics = meterHub.diagnostics.value
+        return LocalAPIStateResponse(
+            driverInstalled: diagnostics.sinkAvailable,
+            engineRunning: diagnostics.running,
+            channels: channels.enumerated().map { index, settings in
+                let present = meterSnapshot(for: settings.deviceUID).connected
+                return LocalAPIChannelState(
+                    index: index,
+                    name: settings.deviceName,
+                    // Contributing to the mix right now: plugged in, and not
+                    // silenced by its own mute or by another channel's solo.
+                    active: present && !isEffectivelyMuted(settings),
+                    muted: settings.muted,
+                    gainDB: settings.gainDB,
+                    present: present)
+            })
+    }
+
+    func apiSetMuted(channel: Int, muted: Bool) -> Bool {
+        guard channels.indices.contains(channel) else { return false }
+        update(channels[channel].deviceUID) { $0.muted = muted }
+        return true
+    }
+
+    func apiToggleMute(channel: Int) -> Bool {
+        guard channels.indices.contains(channel) else { return false }
+        update(channels[channel].deviceUID) { $0.muted.toggle() }
+        return true
+    }
+
+    func apiSetGainDB(channel: Int, gainDB: Float) -> Bool {
+        guard channels.indices.contains(channel) else { return false }
+        let uid = channels[channel].deviceUID
+        let range = gainRange(for: uid)
+        update(uid) { $0.gainDB = min(max(gainDB, range.lowerBound), range.upperBound) }
+        return true
+    }
+
+    func apiStartEngine() { engine?.start() }
+    func apiStopEngine() { engine?.stop() }
+}
+
 extension Notification.Name {
     /// Posted when the virtual output device appears or disappears, so anything
     /// whose advice depends on the driver being installed can re-read the disk.

@@ -5,6 +5,7 @@ import SwiftUI
 struct OpenConnctApp: App {
     @StateObject private var store = ParameterStore()
     @StateObject private var updates = UpdateManager()
+    @StateObject private var localAPI = LocalAPIController()
     private let engine = AudioEngine()
 
     var body: some Scene {
@@ -12,6 +13,7 @@ struct OpenConnctApp: App {
             RootView()
                 .environmentObject(store)
                 .environmentObject(updates)
+                .environmentObject(localAPI)
                 // maxWidth/maxHeight .infinity are the load-bearing part. With
                 // only min and ideal set, the content refuses to grow past its
                 // ideal size, so any window larger than the ideal left the
@@ -49,6 +51,7 @@ struct OpenConnctApp: App {
         // Attach first: the engine reports its initial device list through the
         // callback the store installs here.
         store.attach(engine: engine)
+        localAPI.attach(backend: store)
         engine.requestPermissionAndStart { granted in
             store.microphonePermissionDenied = !granted
         }

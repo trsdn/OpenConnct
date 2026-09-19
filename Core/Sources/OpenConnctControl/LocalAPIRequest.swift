@@ -26,6 +26,40 @@ public struct LocalAPIRequest: Equatable {
         self.body = body
     }
 
+    /// Where a partly-received request stands.
+    public enum Framing: Equatable {
+        case needMore
+        /// The whole request, head and body, is `total` bytes long.
+        case complete(total: Int)
+        case invalid
+    }
+
+    /// The largest body this API will wait for. Its biggest real request is a
+    /// few dozen bytes; anything approaching this is not a client of ours.
+    public static let maxBodyBytes = 4096
+
+    /// Decides whether the bytes read so far form a whole request, so the
+    /// socket loop knows whether to keep reading, answer, or hang up.
+    public static func framing(of data: Data) -> Framing {
+        let separator = Data("\r\n\r\n".utf8)
+        guard let end = data.range(of: separator) else {
+            // A head that has not ended by now is not going to.
+            return data.count > 8192 ? .invalid : .needMore
+        }
+        let headText = String(decoding: data[data.startIndex..<end.lowerBound], as: UTF8.self)
+        var length = 0
+        for line in headText.components(separatedBy: "\r\n").dropFirst() {
+            guard let colon = line.firstIndex(of: ":"),
+                  line[line.startIndex..<colon].trimmingCharacters(in: .whitespaces).lowercased() == "content-length"
+            else { continue }
+            let value = line[line.index(after: colon)...].trimmingCharacters(in: .whitespaces)
+            guard let parsed = Int(value), parsed >= 0, parsed <= maxBodyBytes else { return .invalid }
+            length = parsed
+        }
+        let total = data.distance(from: data.startIndex, to: end.upperBound) + length
+        return data.count >= total ? .complete(total: total) : .needMore
+    }
+
     /// Looks up a header by name, ignoring case, as HTTP requires.
     public func header(named name: String) -> String? {
         headers[name.lowercased()]

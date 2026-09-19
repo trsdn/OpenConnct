@@ -335,6 +335,57 @@ Turn it off from the **OpenConnct** menu (**Check for Updates Automatically**),
 or check on demand with **Check for Updates…** in the same menu. The setting
 persists in `UserDefaults` under `updates.automaticChecks.v1`.
 
+### Controlling it from other apps
+
+OpenConnct can be muted, have its gain set and be read from a script or a
+Stream Deck (for example through OpenDeck), over a small HTTP API. **It is off
+until you turn it on**: open **Technical details** in the header bar and switch
+on **Control from other apps**.
+
+What that exposes, and what it does not:
+
+- It listens on `127.0.0.1` only, so nothing on your network can reach it.
+- Every request needs the secret key in `~/Library/Application Support/OpenConnct/api-token`
+  (readable by your user account only), sent as `Authorization: Bearer <key>`.
+- Requests that carry an `Origin` header are refused, which is what a web page
+  always sends and a script never does, so a page in your browser cannot drive
+  the mixer even if it guesses the port.
+- The port is `47831`, or a free one if that is taken; the one in use is in
+  `api-port` beside the key. Both files are written when the API is switched
+  on, and the port file is removed when it is switched off.
+
+```sh
+DIR=~/Library/Application\ Support/OpenConnct
+API=http://127.0.0.1:$(cat "$DIR/api-port"); KEY=$(cat "$DIR/api-token")
+
+curl -H "Authorization: Bearer $KEY" $API/v1/state
+curl -H "Authorization: Bearer $KEY" -X POST -d '{"muted":true}'  $API/v1/channel/0/mute
+curl -H "Authorization: Bearer $KEY" -X POST                      $API/v1/channel/0/mute/toggle
+curl -H "Authorization: Bearer $KEY" -X POST -d '{"gainDB":-6.5}' $API/v1/channel/0/gain
+curl -H "Authorization: Bearer $KEY" -X POST                      $API/v1/engine/stop   # or /start
+```
+
+Every call answers with the resulting state, so a client never needs a second
+request to learn what its own request did:
+
+```json
+{
+  "driverInstalled": true,
+  "engineRunning": true,
+  "channels": [
+    { "index": 0, "name": "USB Microphone", "active": true, "muted": false, "gainDB": 3.0, "present": true }
+  ]
+}
+```
+
+`present` is false when the microphone is unplugged, so a deck button can grey
+out instead of switching a channel that is not there. `active` means the
+channel is contributing to the mix right now: present, and not silenced by its
+own mute or by another channel's solo. Gain is in decibels, the figure the
+slider shows, and is clamped to the slider's range. Channel indices are the
+mixer's order, which changes when microphones come and go — address a channel
+by index only after reading `/v1/state`.
+
 ---
 
 ## Architecture

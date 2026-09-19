@@ -238,6 +238,9 @@ struct DiagnosticsDetail: View {
 
             Divider().background(Theme.border)
             micControlSection
+
+            Divider().background(Theme.border)
+            LocalAPISection()
         }
         .padding(14)
         .frame(width: 320, alignment: .leading)
