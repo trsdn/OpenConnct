@@ -318,7 +318,7 @@ persists in `UserDefaults` under `updates.automaticChecks.v1`.
 
 OpenConnct can be muted, have its gain set and be read from a script or a
 Stream Deck (for example through OpenDeck), over a small HTTP API. **It is off
-until you turn it on**: open **Technical details** in the header bar and switch
+until you turn it on**: open **OpenConnct ▸ Settings…** (⌘,) and switch
 on **Control from other apps**.
 
 What that exposes, and what it does not:

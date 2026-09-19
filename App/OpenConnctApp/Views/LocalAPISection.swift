@@ -1,10 +1,8 @@
 import SwiftUI
 
-/// The opt-in for the local control API, in the diagnostics popover next to the
-/// other capability that is off until asked for.
+/// The opt-in for the local control API, shown in the Settings window.
 ///
-/// Says what turning it on exposes, in the same plain terms as the Input
-/// Monitoring note above it: the reader should be able to decide without
+/// Says what turning it on exposes in plain terms: the reader should be able to decide without
 /// knowing what a loopback interface is.
 struct LocalAPISection: View {
     @ObservedObject var api: LocalAPIController
@@ -21,7 +19,7 @@ struct LocalAPISection: View {
 
             Text(explanation)
                 .font(Theme.captionFont)
-                .foregroundColor(Theme.textDisabled)
+                .foregroundColor(Theme.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
     }

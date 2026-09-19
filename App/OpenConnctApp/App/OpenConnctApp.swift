@@ -45,6 +45,11 @@ struct OpenConnctApp: App {
                 UpdateCommands(updates: updates)
             }
         }
+
+        // OpenConnct ▸ Settings… (⌘,)
+        Settings {
+            SettingsView(api: localAPI)
+        }
     }
 
     private func startAudio() {

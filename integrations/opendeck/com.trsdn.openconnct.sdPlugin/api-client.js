@@ -42,7 +42,7 @@ async function credentials() {
         // off) or the app has never run: the same answer for the person at the
         // deck, and the same fix.
         throw new ApiUnavailableError(
-            "OpenConnct's control API is off. Switch on “Control from other apps” in its Technical details."
+            "OpenConnct's control API is off. Switch on “Control from other apps” in OpenConnct's Settings (⌘,)."
         );
     }
 }

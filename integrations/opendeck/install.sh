@@ -51,4 +51,4 @@ fi
 echo "node: $(command -v node) ($version)"
 echo
 echo "Restart the deck app to pick it up, and run this again after any change."
-echo "Then switch on \"Control from other apps\" in OpenConnct's Technical details."
+echo "Then switch on \"Control from other apps\" in OpenConnct's Settings (OpenConnct ▸ Settings…, ⌘,)."

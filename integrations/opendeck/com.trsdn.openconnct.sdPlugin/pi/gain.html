@@ -30,7 +30,7 @@
             step.value = settings.step ?? "1";
             note.textContent = options.running
                 ? "The key shows the microphone's current gain. Put one key on +, another on −."
-                : "OpenConnct is not reachable, so there are no microphones to list yet. Switch on “Control from other apps” in its Technical details.";
+                : "OpenConnct is not reachable, so there are no microphones to list yet. Switch on “Control from other apps” in OpenConnct's Settings (⌘,).";
             note.className = options.running ? "note" : "note warning";
             select.onchange = () => OpenConnctPI.save({ name: select.value });
             step.onchange = () => OpenConnctPI.save({ step: step.value });

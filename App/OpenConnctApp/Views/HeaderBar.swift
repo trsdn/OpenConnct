@@ -23,11 +23,6 @@ struct HeaderBar: View {
     @ObservedObject var store: ParameterStore
     @ObservedObject var diagnosticsSource: DiagnosticsSource
     @ObservedObject var masterSource: ChannelMeterSource
-    // Read here, in the window's own hierarchy, and handed to the popover
-    // explicitly. A popover is presented outside that hierarchy on macOS and
-    // is not guaranteed to inherit environment objects; a missing one would
-    // crash the moment "Technical details" was opened.
-    @EnvironmentObject var api: LocalAPIController
 
     @State private var showDetails = false
     @State private var showDevices = false
@@ -114,7 +109,7 @@ struct HeaderBar: View {
                 help: "Technical details"
             ) { showDetails.toggle() }
             .popover(isPresented: $showDetails, arrowEdge: .bottom) {
-                DiagnosticsDetail(diagnostics: diagnostics, api: api)
+                DiagnosticsDetail(diagnostics: diagnostics)
             }
         }
     }
@@ -191,7 +186,6 @@ struct MasterMeterBar: View {
 
 struct DiagnosticsDetail: View {
     let diagnostics: EngineDiagnostics
-    @ObservedObject var api: LocalAPIController
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -244,9 +238,6 @@ struct DiagnosticsDetail: View {
 
             Divider().background(Theme.border)
             micControlSection
-
-            Divider().background(Theme.border)
-            LocalAPISection(api: api)
         }
         .padding(14)
         .frame(width: 320, alignment: .leading)

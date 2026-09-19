@@ -15,7 +15,7 @@ runs on whatever Node the deck app provides.
 
 ## Install
 
-1. In OpenConnct, open **Technical details** in the header bar and switch on
+1. In OpenConnct, open **OpenConnct ▸ Settings…** (⌘,) and switch on
    **Control from other apps**. The plugin cannot see the app until you do.
 2. Run
 

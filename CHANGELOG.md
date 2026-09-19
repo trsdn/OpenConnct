@@ -6,6 +6,11 @@ from the entry for the version being released.
 
 ## [Unreleased]
 
+### Changed
+
+- **Control from other apps** moved out of the diagnostics panel into a proper
+  Settings window (**OpenConnct ▸ Settings…**, ⌘,), where a setting can be found.
+
 ## [0.3.0] - 2026-09-19
 
 ### Added

@@ -22,7 +22,7 @@
             fillSelect(select, options.channels, settings.name, "The only one found");
             note.textContent = options.running
                 ? "The key turns red while the microphone is muted, and grey while it is unplugged."
-                : "OpenConnct is not reachable, so there are no microphones to list yet. Switch on “Control from other apps” in its Technical details.";
+                : "OpenConnct is not reachable, so there are no microphones to list yet. Switch on “Control from other apps” in OpenConnct's Settings (⌘,).";
             note.className = options.running ? "note" : "note warning";
             // Not while the field has focus: a settings round trip would put the
             // saved text back under the cursor mid-typing.
