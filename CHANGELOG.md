@@ -6,6 +6,8 @@ from the entry for the version being released.
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-09-19
+
 ### Added
 
 - **Solo, fader and filters over the local API.** `GET /v1/state` now reports each
