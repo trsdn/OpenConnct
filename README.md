@@ -36,27 +36,6 @@ OpenConnct is a native macOS app for running several USB microphones at once: in
 
 ## Install
 
-### Upgrading from OpenConnect
-
-This project used to be called OpenConnect. That name was already taken by a
-well-known VPN client, so it is now **OpenConnct**. The rename reaches further
-than the label, and there are three consequences worth knowing before you
-upgrade:
-
-- **The old driver must go.** It is named after the application, so the new one
-  installs alongside rather than over it, and you would end up with two
-  identical pairs of virtual devices and no way to tell which one your
-  conferencing application had picked. Both the `.pkg` installer and
-  `scripts/install_driver_dev.sh` remove it for you; `scripts/uninstall_driver.sh`
-  removes it too.
-- **Anything pointing at "OpenConnect Mic" needs pointing at "OpenConnct Mic".**
-  Teams, Zoom, OBS and System Settings all store the device by name.
-- **macOS will ask for microphone permission again.** The grant is tied to the
-  application's bundle identifier, which changed with the name.
-
-Your channel settings and device selection carry over by themselves: the
-Application Support directory is renamed on first launch.
-
 ### Release install (recommended)
 
 Download the DMG from the [latest release](https://github.com/trsdn/OpenConnct/releases/latest)
@@ -541,7 +520,7 @@ OpenConnct/
 │       ├── Models/
 │       │   └── ChannelSettings.swift       Per-channel settings model (Codable)
 │       ├── Persistence/
-│       │   ├── AppSupport.swift            Application Support location + rename migration
+│       │   ├── AppSupport.swift            Application Support location
 │       │   └── SettingsStore.swift         JSON persistence keyed by device UID
 │       ├── Resources/
 │       │   └── install-driver.sh           Run as root by /bin/bash, sealed in the signed bundle

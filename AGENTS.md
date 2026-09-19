@@ -85,11 +85,12 @@ cannot, matching what `.github/workflows/ci.yml` does for the `build` job.
 - The DSP core (`Core/Sources/OpenConnctDSP`) is C-ABI and tested independently
   of the Swift app layer; keep new DSP logic there, not inlined in the app or
   driver targets.
-- Anything that touches the old project name ("OpenConnect", no `t`) is
-  intentional legacy/migration handling (old driver name, old Application
-  Support directory, upgrade docs) — see `README.md`'s "Upgrading from
-  OpenConnect" section. Do not "fix" these to say "OpenConnct"; that would
-  break migration for existing installs.
+- Anything that still says "OpenConnect" (no `t`) is intentional legacy
+  handling for installs that predate the current name: the old driver and the
+  old Application Support directory, in `AppSupport.swift` and the driver
+  install/uninstall scripts. Do not "fix" these to say "OpenConnct"; that would
+  break upgrades for existing installs. The CI naming guard lists the files
+  where this is allowed.
 
 ## Do not do these
 

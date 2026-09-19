@@ -25,7 +25,6 @@ jobs:
         run: |
           set -euo pipefail
           allowed="
-          README.md
           AGENTS.md
           .github/workflows/ci.yml
           App/OpenConnctApp/Persistence/AppSupport.swift
