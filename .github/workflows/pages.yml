@@ -3,6 +3,11 @@ name: Pages
 # Publishes site/ to GitHub Pages. The page names the latest release and the
 # date it was built (see scripts/build_site.sh), so it is rebuilt when the
 # site changes, when a release is published, and weekly as a backstop.
+#
+# A release event runs with the tag as its ref, and the github-pages environment
+# only accepts deployments from main. So a release does not build here: it asks
+# for a run on main (the `refresh` job), which does. The environment rule stays
+# as strict as it was.
 on:
   push:
     branches: [main]
@@ -24,8 +29,21 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  refresh:
+    name: Rebuild on main for the new release
+    if: github.event_name == 'release'
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+    steps:
+      - name: Dispatch the site build on main
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run pages.yml --repo "$GITHUB_REPOSITORY" --ref main
+
   build:
     name: Build site
+    if: github.event_name != 'release'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
