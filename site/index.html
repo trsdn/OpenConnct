@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OpenConnct: several USB microphones as one input on macOS</title>
+<meta name="description" content="OpenConnct mixes several USB microphones into one virtual input for Teams, Zoom and OBS on macOS, and keeps them in step so the mix never clicks.">
+<meta name="color-scheme" content="dark light">
+<link rel="icon" href="assets/icon.png" type="image/png">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="top">
+  <a class="brand" href="./">
+    <img src="assets/icon.png" width="32" height="32" alt="">
+    <span>OpenConnct</span>
+  </a>
+  <a class="source" href="https://github.com/trsdn/OpenConnct">Source on GitHub</a>
+</header>
+
+<main>
+
+  <section class="hero" aria-labelledby="h-title">
+    <div class="hero-text">
+      <h1 id="h-title">Two USB microphones, one input.</h1>
+      <p class="lead">OpenConnct is a Mac app that mixes several USB microphones into one virtual input. Choose <strong>OpenConnct Mic</strong> in Teams, Zoom or OBS, and everyone on the other end hears the mix.</p>
+      <p class="actions">
+        <a class="button" href="https://github.com/trsdn/OpenConnct/releases/latest">Download OpenConnct {{VERSION}}</a>
+        <a class="quiet" href="#get">How to install</a>
+      </p>
+      <p class="status">Version {{VERSION}}, maintained. Needs macOS 13 or later.</p>
+    </div>
+    <figure class="shot">
+      <img src="assets/mixer.png" width="658" height="572"
+           alt="The OpenConnct window: three microphone channels, each with a fader, a level meter and mute and solo buttons, below a master level bar.">
+    </figure>
+  </section>
+
+  <section class="why" aria-labelledby="h-why">
+    <div class="why-text">
+      <h2 id="h-why">Two microphones never agree on what time it is</h2>
+      <p>Every USB microphone runs on its own clock, and neither is the clock your Mac's output runs on. Software that ignores that drifts: first a click, then a dropout every few seconds.</p>
+      <p>OpenConnct measures each microphone against the output and corrects it continuously, so the mix stays clean for as long as you talk. The correction is tested against simulated drift of up to 200 ppm over two hours.</p>
+    </div>
+
+    <figure class="drift" role="img" aria-label="Two pairs of sine waves. Without correction, the second microphone's wave slowly slides out of step with the first. With OpenConnct, both waves stay exactly together.">
+      <svg viewBox="0 0 640 80" preserveAspectRatio="none" aria-hidden="true" focusable="false">
+        <defs>
+          <path id="wave" fill="none" stroke-width="2.5" stroke-linecap="round"
+                d="M-160 40 Q-140 14 -120 40 T-80 40 T-40 40 T0 40 T40 40 T80 40 T120 40 T160 40 T200 40 T240 40 T280 40 T320 40 T360 40 T400 40 T440 40 T480 40 T520 40 T560 40 T600 40 T640 40 T680 40 T720 40 T760 40 T800 40"/>
+        </defs>
+      </svg>
+      <div class="lane">
+        <svg viewBox="0 0 640 80" preserveAspectRatio="none" aria-hidden="true" focusable="false">
+          <use href="#wave" class="mic-a"/>
+          <use href="#wave" class="mic-b drifting"/>
+        </svg>
+        <figcaption>Left alone, microphone B slips away from microphone A.</figcaption>
+      </div>
+      <div class="lane">
+        <svg viewBox="0 0 640 80" preserveAspectRatio="none" aria-hidden="true" focusable="false">
+          <use href="#wave" class="mic-a"/>
+          <use href="#wave" class="mic-b locked"/>
+        </svg>
+        <figcaption>With OpenConnct, they stay together. An illustration of the effect, not a recording.</figcaption>
+      </div>
+    </figure>
+  </section>
+
+  <section class="features" aria-labelledby="h-what">
+    <h2 id="h-what">What you get</h2>
+    <dl>
+      <div>
+        <dt>A strip for every microphone</dt>
+        <dd>Gain, high-pass filter, noise gate, compressor, mute and solo. Everything is remembered per microphone, so a mic you plug back in returns exactly as you left it.</dd>
+      </div>
+      <div>
+        <dt>One input for every app</dt>
+        <dd>Teams, Zoom, OBS and anything else that can pick a microphone can pick OpenConnct Mic.</dd>
+      </div>
+      <div>
+        <dt>A gain that finds itself</dt>
+        <dd>Say a sentence and OpenConnct proposes a gain from your measured voice, instead of asking you to guess.</dd>
+      </div>
+      <div>
+        <dt>New devices arrive muted</dt>
+        <dd>A headset that connects itself never joins your call unannounced. One click un-mutes it when you want it.</dd>
+      </div>
+    </dl>
+    <p class="not">OpenConnct is only the mixing stage. It does not record, play sounds or monitor through headphones.</p>
+  </section>
+
+  <section class="get" id="get" aria-labelledby="h-get">
+    <h2 id="h-get">Get it</h2>
+    <ol>
+      <li>Download the disk image and drag <strong>OpenConnct</strong> into your Applications folder.</li>
+      <li>Open it and click <strong>Install</strong> when it offers the audio driver. You sign in once, and audio drops out across the Mac for about a second.</li>
+      <li>In Teams, Zoom or OBS, choose <strong>OpenConnct Mic</strong> as the microphone.</li>
+    </ol>
+    <p class="actions">
+      <a class="button" href="https://github.com/trsdn/OpenConnct/releases/latest">Download OpenConnct {{VERSION}}</a>
+    </p>
+    <p class="fine">Signed with a Developer ID and notarized by Apple. Works on Apple Silicon and Intel Macs running macOS 13 or later.</p>
+  </section>
+
+  <section class="privacy" aria-labelledby="h-privacy">
+    <h2 id="h-privacy">Privacy</h2>
+    <p>OpenConnct collects nothing. There is no account, no analytics and no telemetry. The only network request the app makes on its own is a daily check of GitHub for a newer version. This page sets no cookies and loads nothing from other sites.</p>
+  </section>
+
+</main>
+
+<footer>
+  <nav aria-label="Project links">
+    <a href="https://github.com/trsdn/OpenConnct">Source code</a>
+    <a href="https://github.com/trsdn/OpenConnct/blob/main/LICENSE">MIT license</a>
+    <a href="https://github.com/trsdn/OpenConnct/blob/main/SECURITY.md">Security policy</a>
+    <a href="https://github.com/trsdn/OpenConnct/issues">Help and bug reports</a>
+  </nav>
+  <p>Page last reviewed {{DATE}}.</p>
+</footer>
+
+</body>
+</html>

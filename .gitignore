@@ -13,3 +13,6 @@ tools/probe/build/
 # Bench measurement rig: build output and captured audio
 tools/bench/build/
 tools/bench/samples/
+
+# GitHub Pages build output
+_site/

@@ -31,10 +31,12 @@ whatever app consumes the resulting virtual device.
 | `scripts/` | Build, packaging, signing, notarization, install/uninstall shell scripts |
 | `tools/` | Standalone diagnostic binaries (bench, probe, driver harness) — not shipped |
 | `docs/` | Verification runbooks and design docs |
-| `.github/workflows/` | CI (build + test) and release (signed DMG/PKG + notarization) |
+| `site/` | The GitHub Pages landing page: static HTML/CSS, no scripts, no third-party requests. `scripts/build_site.sh` fills in the release version and date; `.github/workflows/pages.yml` deploys it |
+| `.github/workflows/` | CI (build, test, naming guard) and the Pages deploy. There is no release workflow: releases come only from the notarization broker (see `README.md`, "Releasing") |
 
 Generated, never hand-edit:
 - `dist/` — build output, recreated by `make build`/`make driver`
+- `_site/` — the built landing page, recreated by `scripts/build_site.sh`
 - `Core/.build/`, `Update/.build/`, `tools/*/build/` — SwiftPM/clang build caches, removed by `make clean`
 
 ## Setup
@@ -91,12 +93,12 @@ cannot, matching what `.github/workflows/ci.yml` does for the `build` job.
 ## Do not do these
 
 - Do not rewrite history, force push, or delete branches.
-- Do not commit secrets, tokens, credentials, or personal data. Signing/
-  notarization secrets live only in GitHub Actions secrets, consumed by
-  `.github/workflows/release.yml`.
+- Do not commit secrets, tokens, credentials, or personal data. Signing and
+  notarization credentials never enter this repository; the notarization
+  broker holds them (see `README.md`, "Releasing").
 - Do not deploy, publish a release, create or move tags, or change repository
-  settings (topics, branch protection, security settings) without being asked.
-  Releases are cut by pushing a `v*` tag or running `release.yml` manually.
+  settings (topics, branch protection, security settings, Pages) without being
+  asked. Releases are cut only through the notarization broker.
 - Do not run `make install-driver` / `make uninstall-driver` or any script
   under `scripts/` that calls `sudo` unless explicitly asked to test on real
   hardware — they install a HAL plug-in into a running `coreaudiod` and can
