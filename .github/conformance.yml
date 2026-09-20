@@ -14,119 +14,119 @@
 #
 # `assessed_on` is a placeholder, and the check rejects it until you replace it
 # with the date you assessed the repository. That is deliberate. A record is
-# produced by a person looking at a repository, and a generated file must not be
-# able to pass for one.
+# produced by an assessor, a person or an AI agent, that read the evidence, and
+# a generated file must not be able to pass for one.
 #
 # The badge is generated from this file. Change the evidence first, then this
 # record, then regenerate. Never the other way round.
 
-standard_version: "1.12.0"
-assessed_on: "2026-09-19"
+standard_version: "1.15.0"
+assessed_on: "2026-09-20"
 state: "Needs work"
 evidence: "docs/self-assessment.md"
 
 criteria:
-  B01: unknown
-  B02: unknown
+  B01: pass
+  B02: pass
   B03: pass
-  B04: unknown
-  B05: unknown
-  B06: unknown
-  B07: unknown
-  B08: unknown
-  B09: unknown
-  B10: unknown
+  B04: pass
+  B05: pass
+  B06: pass
+  B07: pass
+  B08: pass
+  B09: partial
+  B10: pass
   B11: pass
   B12: pass
-  B13: unknown
-  B14: unknown
-  B15: unknown
-  B16: unknown
+  B13: partial
+  B14: partial
+  B15: fail
+  B16: fail
   P01: pass
   P02: pass
   P03: pass
   P04: pass
-  P05: unknown
+  P05: partial
   P06: pass
-  P07: unknown
-  P08: unknown
-  P09: unknown
-  P10: unknown
-  P11: unknown
-  S01: unknown
-  S02: unknown
-  S03: unknown
-  S04: unknown
+  P07: pass
+  P08: fail
+  P09: fail
+  P10: pass
+  P11: pass
+  S01: pass
+  S02: pass
+  S03: partial
+  S04: pass
   S05: pass
-  S06: unknown
-  S07: unknown
-  S08: unknown
-  S09: unknown
-  S10: unknown
+  S06: pass
+  S07: pass
+  S08: fail
+  S09: fail
+  S10: pass
   S11: pass
   S12: pass
   S13: na
-  D01: unknown
-  D02: unknown
-  D03: unknown
-  D04: unknown
-  D05: unknown
-  D06: unknown
-  R01: unknown
-  R02: unknown
-  R03: unknown
-  R04: unknown
-  R05: unknown
-  R06: unknown
-  R07: unknown
-  R08: unknown
-  I01: unknown
-  I02: unknown
-  I03: unknown
-  I04: unknown
-  I05: unknown
-  I06: unknown
-  T01: unknown
-  T02: unknown
-  T03: unknown
-  T04: unknown
-  T05: unknown
+  D01: na
+  D02: na
+  D03: na
+  D04: na
+  D05: na
+  D06: na
+  R01: partial
+  R02: fail
+  R03: pass
+  R04: pass
+  R05: fail
+  R06: pass
+  R07: pass
+  R08: partial
+  I01: partial
+  I02: fail
+  I03: fail
+  I04: partial
+  I05: pass
+  I06: partial
+  T01: na
+  T02: na
+  T03: na
+  T04: na
+  T05: na
   W01: pass
   W02: pass
   W03: pass
-  W04: partial
-  W05: unknown
-  W06: unknown
+  W04: pass
+  W05: na
+  W06: na
   W07: pass
-  W08: pass
+  W08: partial
   W09: pass
   G01: pass
   G02: pass
   G03: pass
-  G04: na
+  G04: pass
   G05: pass
   G06: pass
   G07: pass
-  G08: na
-  L01: unknown
-  L02: unknown
-  L03: unknown
-  L04: unknown
-  L05: unknown
-  L06: unknown
-  L07: unknown
-  X01: unknown
-  X02: unknown
-  X03: unknown
-  X04: unknown
-  X05: unknown
-  Y01: unknown
-  Y02: unknown
-  Y03: unknown
-  Y04: unknown
-  Y05: unknown
-  Y06: unknown
-  A01: unknown
-  A02: unknown
-  A03: unknown
-  A04: unknown
+  G08: fail
+  L01: fail
+  L02: pass
+  L03: fail
+  L04: na
+  L05: partial
+  L06: na
+  L07: partial
+  X01: partial
+  X02: pass
+  X03: partial
+  X04: na
+  X05: fail
+  Y01: partial
+  Y02: pass
+  Y03: pass
+  Y04: partial
+  Y05: pass
+  Y06: partial
+  A01: na
+  A02: na
+  A03: na
+  A04: na
