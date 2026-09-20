@@ -6,12 +6,17 @@ from the entry for the version being released.
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-09-20
+
 ### Added
 
 - **Delay setting** in Settings (Lowest, Balanced, Safe). It sets the block size the
   microphones and the virtual device run at and how much cushion OpenConnct keeps
   against USB jitter. Safe is the previous behaviour and stays the default; the
   filters (gate, high-pass, compressor, exciter, bass) add no delay at any setting.
+  Measured with a USB microphone, OpenConnct adds about 73 ms at Safe, 54 ms at
+  Balanced and 41 ms at Lowest, and the figure no longer changes between sessions.
+  Lower settings leave less room for USB jitter, so a busy Mac may crackle at Lowest.
 
 ### Fixed
 
@@ -19,7 +24,8 @@ from the entry for the version being released.
   gave the virtual microphone and the internal output device separate time origins,
   each set whenever its first client started, so the distance between where audio
   was written and where it was read differed on every session. Both now share one
-  origin. Needs the driver to be reinstalled.
+  origin. The driver has to be updated for this to take effect; installing it
+  restarts system audio for about a second.
 
 ## [0.4.0] - 2026-09-19
 
