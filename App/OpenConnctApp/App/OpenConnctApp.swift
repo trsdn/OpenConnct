@@ -48,7 +48,7 @@ struct OpenConnctApp: App {
 
         // OpenConnct ▸ Settings… (⌘,)
         Settings {
-            SettingsView(api: localAPI)
+            SettingsView(api: localAPI, engine: engine)
         }
     }
 

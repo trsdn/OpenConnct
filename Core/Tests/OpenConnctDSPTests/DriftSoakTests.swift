@@ -46,6 +46,8 @@ private final class DriftSimulator {
     let sineFrequency: Double?
     let captureTailFrames: Int
     let stallBlocks: Range<Int>?
+    let targetFill: Float
+    let kp: Float
 
     init(
         ppm: Double,
@@ -54,8 +56,12 @@ private final class DriftSimulator {
         settlingSeconds: Double = 20,
         sineFrequency: Double? = nil,
         captureTailSeconds: Double = 0,
-        stallBlocks: Range<Int>? = nil
+        stallBlocks: Range<Int>? = nil,
+        targetFill: Float = driftTargetFill,
+        kp: Float = driftKp
     ) {
+        self.targetFill = targetFill
+        self.kp = kp
         self.ppm = ppm
         self.seconds = seconds
         self.blockSize = blockSize
@@ -68,7 +74,7 @@ private final class DriftSimulator {
     func run() -> DriftMetrics {
         let totalBlocks = Int(seconds * driftSampleRate / Double(blockSize))
         let micRate = driftSampleRate * (1.0 + ppm * 1.0e-6)
-        let initialFill = max(4, Int(driftTargetFill) - blockSize)
+        let initialFill = max(4, Int(targetFill) - blockSize)
         let maxProduce = blockSize + 8
 
         var storage = Array(repeating: Float(0), count: Int(driftRingCapacity))
@@ -102,7 +108,7 @@ private final class DriftSimulator {
                         oc_resampler_init(&resampler, 1.0)
                         var drift = oc_drift_controller()
                         oc_drift_controller_init(
-                            &drift, driftTargetFill, driftKp, driftKi,
+                            &drift, targetFill, kp, driftKi,
                             driftIntegratorLimit, driftRatioLimit, driftSlewPerUpdate)
 
                         writeInput(
@@ -148,7 +154,7 @@ private final class DriftSimulator {
                             metrics.maxFill = max(metrics.maxFill, fill, postFill)
 
                             if let disturbanceEnd, block >= disturbanceEnd {
-                                let err = abs(Double(fill) - Double(driftTargetFill))
+                                let err = abs(Double(fill) - Double(targetFill))
                                 metrics.peakErrorAfterDisturbance =
                                     max(metrics.peakErrorAfterDisturbance, err)
                                 if err > Self.settlingTolerance { lastUnsettledBlock = block }
@@ -348,6 +354,50 @@ final class DriftSoakTests: XCTestCase {
         XCTAssertEqual(metrics.settledFillMean, Double(driftTargetFill), accuracy: 96)
         XCTAssertEqual(metrics.settledCorrectionPPM, 0, accuracy: 30)
         XCTAssertLessThan(metrics.maxCorrectionOffset, driftRatioLimit + 1.0e-7)
+    }
+
+    // MARK: - Low-latency profiles
+    //
+    // The same loop at the block sizes and cushions of the two faster
+    // `LatencyProfile`s (128 frames / 384, 256 frames / 768), with kp raised by
+    // √(512/block). The claim under test is that shrinking the cushion does not
+    // cost the drift loop its stability: no dropouts at either clock error, and
+    // a step of one block is absorbed without ringing.
+
+    func testLowestProfileHoldsItsCushionAcrossClockErrors() {
+        for ppm in [-200.0, 0, 200] {
+            let metrics = DriftSimulator(
+                ppm: ppm, seconds: 300, blockSize: 128, targetFill: 384, kp: 5.6e-6).run()
+            printMetrics("lowest profile, \(Int(ppm)) ppm", metrics)
+            XCTAssertEqual(metrics.underrunsAfterSettling, 0, "\(ppm) ppm")
+            XCTAssertEqual(metrics.overrunsAfterSettling, 0, "\(ppm) ppm")
+            XCTAssertEqual(metrics.settledFillMean, 384, accuracy: 48, "\(ppm) ppm")
+            XCTAssertEqual(metrics.settledCorrectionPPM, ppm, accuracy: 20, "\(ppm) ppm")
+        }
+    }
+
+    func testLowestProfileAbsorbsAOneBlockStep() {
+        let stallStart = Int(30 * driftSampleRate / 128)
+        let metrics = DriftSimulator(
+            ppm: 0, seconds: 300, blockSize: 128, stallBlocks: stallStart..<(stallStart + 1),
+            targetFill: 384, kp: 5.6e-6).run()
+        printMetrics("lowest profile, one-block step", metrics)
+        XCTAssertEqual(metrics.underrunsTotal, 0)
+        XCTAssertEqual(metrics.overrunsTotal, 0)
+        XCTAssertLessThan(metrics.settlingSecondsAfterDisturbance, 90)
+    }
+
+    func testBalancedProfileHoldsItsCushionAcrossClockErrors() {
+        for ppm in [-200.0, 0, 200] {
+            let metrics = DriftSimulator(
+                ppm: ppm, seconds: 300, blockSize: 256, targetFill: 768,
+                kp: Float(2.8e-6 * 2.0.squareRoot())).run()
+            printMetrics("balanced profile, \(Int(ppm)) ppm", metrics)
+            XCTAssertEqual(metrics.underrunsAfterSettling, 0, "\(ppm) ppm")
+            XCTAssertEqual(metrics.overrunsAfterSettling, 0, "\(ppm) ppm")
+            XCTAssertEqual(metrics.settledFillMean, 768, accuracy: 64, "\(ppm) ppm")
+            XCTAssertEqual(metrics.settledCorrectionPPM, ppm, accuracy: 20, "\(ppm) ppm")
+        }
     }
 
     private func assertStable(

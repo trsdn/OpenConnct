@@ -2,14 +2,19 @@ import SwiftUI
 
 /// The application's settings, opened from OpenConnct ▸ Settings… (⌘,).
 ///
-/// The one setting here is the opt-in for the local control API. It used to live
-/// in the diagnostics popover, next to the other capability that is off until
-/// asked for, and nobody looks for a setting in a diagnostics panel.
+/// The delay setting, and the opt-in for the local control API. The latter used
+/// to live in the diagnostics popover, next to the other capability that is off
+/// until asked for, and nobody looks for a setting in a diagnostics panel.
 struct SettingsView: View {
     @ObservedObject var api: LocalAPIController
+    let engine: AudioEngine
 
     var body: some View {
-        LocalAPISection(api: api)
+        VStack(alignment: .leading, spacing: 20) {
+            LatencySection(engine: engine)
+            Divider()
+            LocalAPISection(api: api)
+        }
             .padding(20)
             .frame(width: 440, alignment: .leading)
             .background(Theme.panel)

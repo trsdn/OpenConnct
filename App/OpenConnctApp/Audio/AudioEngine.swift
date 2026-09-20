@@ -39,11 +39,17 @@ final class AudioEngine {
     private var running = false
     private var sinkAvailable = false
 
+    private static let latencyProfileKey = "latencyProfile"
+    /// Delay against crackle. Read at start-up, applied whenever channels are bound.
+    private(set) var latencyProfile: LatencyProfile
+
     private let sampleRate: Double = 48_000
 
     init() {
         rt = RTAlloc.makeEngine(sampleRate: 48_000)
         enabledUIDs = selectionStore.load()
+        latencyProfile = LatencyProfile(
+            storedValue: UserDefaults.standard.string(forKey: Self.latencyProfileKey))
     }
 
     deinit {
@@ -62,6 +68,39 @@ final class AudioEngine {
         enabledUIDs = uids
         selectionStore.save(uids)
         rebind(devices: availableDevices)
+    }
+
+    /// Persists the profile and rebuilds every channel and the output at its block size.
+    func setLatencyProfile(_ profile: LatencyProfile) {
+        guard profile != latencyProfile else { return }
+        latencyProfile = profile
+        UserDefaults.standard.set(profile.rawValue, forKey: Self.latencyProfileKey)
+        guard running else { return }
+        teardownOutput()
+        boundDevices = []
+        rebind(devices: availableDevices)
+    }
+
+    /// Asks a device to run at the profile's block size. Best effort: the device may
+    /// only offer other sizes, or another app may be holding it, and running at
+    /// its own size is still correct, just slower.
+    private func applyBufferSize(to device: AudioObjectID) {
+        var range = AudioValueRange()
+        var size = UInt32(MemoryLayout<AudioValueRange>.size)
+        var address = AudioObjectPropertyAddress(
+            mSelector: kAudioDevicePropertyBufferFrameSizeRange,
+            mScope: kAudioObjectPropertyScopeGlobal, mElement: kAudioObjectPropertyElementMain)
+        var frames = UInt32(latencyProfile.deviceBufferFrames)
+        if AudioObjectGetPropertyData(device, &address, 0, nil, &size, &range) == noErr {
+            frames = min(max(frames, UInt32(range.mMinimum)), UInt32(range.mMaximum))
+        }
+        address.mSelector = kAudioDevicePropertyBufferFrameSize
+        let status = AudioObjectSetPropertyData(
+            device, &address, 0, nil, UInt32(MemoryLayout<UInt32>.size), &frames)
+        if status != noErr {
+            NSLog("OpenConnct: could not set buffer size %u on device %u (status %d)",
+                  frames, device, status)
+        }
     }
 
     /// Applies the user's selection to a raw device list.
@@ -170,7 +209,11 @@ final class AudioEngine {
                 channel.pointee.overruns = 0
                 oc_channel_strip_init(channel.pointee.strip, sampleRate)
                 oc_resampler_init(channel.pointee.resampler, device.nominalSampleRate / sampleRate)
-                ocConfigureDriftController(channel.pointee.drift)
+                channel.pointee.targetFill = UInt32(latencyProfile.ringTargetFrames)
+                channel.pointee.driftKp = Float(latencyProfile.driftProportionalGain)
+                ocConfigureDriftController(
+                    channel.pointee.drift,
+                    targetFill: Float(channel.pointee.targetFill), kp: channel.pointee.driftKp)
                 if let input = makeInputUnit(for: device, channel: channel) {
                     inputs.append(input)
                 }
@@ -237,6 +280,7 @@ final class AudioEngine {
         var unit: AudioUnit?
         guard AudioComponentInstanceNew(component, &unit) == noErr, let unit else { return nil }
 
+        applyBufferSize(to: sink)
         var deviceID = sink
         guard AudioUnitSetProperty(
             unit, kAudioOutputUnitProperty_CurrentDevice, kAudioUnitScope_Global, 0,
@@ -305,6 +349,7 @@ final class AudioEngine {
             return nil
         }
 
+        applyBufferSize(to: device.objectID)
         var deviceID = device.objectID
         guard AudioUnitSetProperty(
             unit, kAudioOutputUnitProperty_CurrentDevice, kAudioUnitScope_Global, 0,

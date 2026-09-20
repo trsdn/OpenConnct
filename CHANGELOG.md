@@ -6,6 +6,21 @@ from the entry for the version being released.
 
 ## [Unreleased]
 
+### Added
+
+- **Delay setting** in Settings (Lowest, Balanced, Safe). It sets the block size the
+  microphones and the virtual device run at and how much cushion OpenConnct keeps
+  against USB jitter. Safe is the previous behaviour and stays the default; the
+  filters (gate, high-pass, compressor, exciter, bass) add no delay at any setting.
+
+### Fixed
+
+- **Random extra delay of up to about 340 ms in the virtual microphone.** The driver
+  gave the virtual microphone and the internal output device separate time origins,
+  each set whenever its first client started, so the distance between where audio
+  was written and where it was read differed on every session. Both now share one
+  origin. Needs the driver to be reinstalled.
+
 ## [0.4.0] - 2026-09-19
 
 ### Added

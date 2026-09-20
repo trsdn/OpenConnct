@@ -14,9 +14,6 @@ let kMaxFrames = 4096
 let kDSPChunk = 1024
 /// Input ring capacity in frames. Must be a power of two.
 let kRingCapacity: UInt32 = 32768
-/// Steady-state ring occupancy the drift controller aims for, in frames. Large
-/// enough to absorb USB scheduling jitter, small enough to keep latency low.
-let kRingTargetFill: Float = 1536
 /// Meter fall-back time. Matches the decay already used by the channel strip's
 /// own meters so a bar does not drop at a different speed depending on which
 /// point in the signal it is watching.
@@ -51,11 +48,13 @@ let kMeterDecayMS: Float = 300
 /// These values give a damping ratio near 0.9 and settle a 512-frame step in
 /// well under a minute, while the correction stays inside a millionth-scale
 /// band that is inaudible throughout.
-func ocConfigureDriftController(_ drift: UnsafeMutablePointer<oc_drift_controller>) {
+func ocConfigureDriftController(
+    _ drift: UnsafeMutablePointer<oc_drift_controller>, targetFill: Float, kp: Float
+) {
     oc_drift_controller_init(
         drift,
-        kRingTargetFill,
-        /* kp */ 2.8e-6,
+        targetFill,
+        kp,
         /* ki */ 1.2e-9,
         /* integrator_limit */ 5.0e-4,
         /* ratio_limit */ 1.0e-3,
@@ -115,6 +114,11 @@ struct ChannelRT {
     var ringStorage: UnsafeMutablePointer<Float>! = nil
     var resampler: UnsafeMutablePointer<oc_resampler>! = nil
     var drift: UnsafeMutablePointer<oc_drift_controller>! = nil
+    /// Ring occupancy, in frames, the output side waits for before it starts
+    /// draining, and the level the drift controller then holds.
+    var targetFill: UInt32 = 1536
+    /// Proportional gain that keeps the drift loop's damping constant at this block size.
+    var driftKp: Float = 2.8e-6
 
     /// Resampled, pre-DSP mono input for this block.
     var pulled: UnsafeMutablePointer<Float>! = nil
@@ -241,7 +245,8 @@ enum RTAlloc {
         channel.resampler = resampler
 
         let drift = UnsafeMutablePointer<oc_drift_controller>.allocate(capacity: 1)
-        ocConfigureDriftController(drift)
+        ocConfigureDriftController(
+            drift, targetFill: Float(channel.targetFill), kp: channel.driftKp)
         channel.drift = drift
 
         let pulled = UnsafeMutablePointer<Float>.allocate(capacity: kMaxFrames)
@@ -483,7 +488,9 @@ let ocOutputRenderCallback: AURenderCallback = {
             // into the new run.
             if oc_ring_buffer_fill_level(channel.pointee.ring) == 0 {
                 channel.pointee.active = 0
-                ocConfigureDriftController(channel.pointee.drift)
+                ocConfigureDriftController(
+                    channel.pointee.drift,
+                    targetFill: Float(channel.pointee.targetFill), kp: channel.pointee.driftKp)
                 oc_resampler_init(channel.pointee.resampler,
                                   channel.pointee.nativeSampleRate / outputRate)
             }
@@ -673,7 +680,7 @@ let ocInputRenderCallback: AURenderCallback = {
     // reach. The controller can only bend the consumption rate by parts per
     // million; it cannot conjure the initial cushion. Priming is the only fix.
     if input.pointee.channel.pointee.active == 0 {
-        if oc_ring_buffer_fill_level(input.pointee.channel.pointee.ring) >= UInt32(kRingTargetFill) {
+        if oc_ring_buffer_fill_level(input.pointee.channel.pointee.ring) >= input.pointee.channel.pointee.targetFill {
             input.pointee.channel.pointee.active = 1
         }
     }

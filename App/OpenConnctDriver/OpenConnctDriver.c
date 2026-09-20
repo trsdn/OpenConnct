@@ -82,10 +82,10 @@ static Float64                      gWriterStaleTicks = 0.0;
 
 // GetZeroTimeStamp bookkeeping, one set per device. Touched only from the IO thread of
 // the corresponding device.
-static UInt64                       gMicAnchorHostTime = 0;
-static UInt64                       gMicTimestampCount = 0;
-static UInt64                       gSinkAnchorHostTime = 0;
-static UInt64                       gSinkTimestampCount = 0;
+// One origin for both devices, set by the first StartIO ever and never reset. The ring is
+// indexed by sample time, so a writer and a reader only line up if their sample times count
+// from the same instant; per-device anchors made the offset between them random.
+static UInt64                       gTimelineAnchorHostTime = 0;
 
 // The shared loopback buffer. Indexed by absolute sample time modulo kRingFrames, which
 // is what lets two independent device IO cycles agree on a position without any pointer
@@ -928,17 +928,10 @@ static OSStatus OpenConnct_StartIO(AudioServerPlugInDriverRef inDriver, AudioObj
     if (!OpenConnct_IsDeviceID(inDeviceObjectID)) { return kAudioHardwareBadObjectError; }
 
     pthread_mutex_lock(&gStateMutex);
+    if (gTimelineAnchorHostTime == 0) { gTimelineAnchorHostTime = mach_absolute_time(); }
     if (inDeviceObjectID == kObjectID_Device_Mic) {
-        if (gMicRunCount == 0) {
-            gMicAnchorHostTime = mach_absolute_time();
-            gMicTimestampCount = 0;
-        }
         ++gMicRunCount;
     } else {
-        if (gSinkRunCount == 0) {
-            gSinkAnchorHostTime = mach_absolute_time();
-            gSinkTimestampCount = 0;
-        }
         ++gSinkRunCount;
     }
     pthread_mutex_unlock(&gStateMutex);
@@ -963,9 +956,10 @@ static OSStatus OpenConnct_StopIO(AudioServerPlugInDriverRef inDriver, AudioObje
     return noErr;
 }
 
-// Both devices derive their timeline from mach_absolute_time() using the identical
-// formula, so they advance at exactly the same rate. That is what allows the ring buffer
-// to be indexed by absolute sample time from two independent IO cycles with no handshake.
+// Both devices derive their timeline from one shared anchor and mach_absolute_time(), so they
+// advance at exactly the same rate and agree on which sample time "now" is, whenever each
+// one started. That is what allows the ring buffer to be indexed by absolute sample time from
+// two independent IO cycles with no handshake and no offset between writer and reader.
 //
 // outSeed stays constant: the timeline never resets, and bumping it spuriously forces
 // clients to resynchronise, which is audible.
@@ -975,22 +969,16 @@ static OSStatus OpenConnct_GetZeroTimeStamp(AudioServerPlugInDriverRef inDriver,
     if (inDriver != gInstance) { return kAudioHardwareBadObjectError; }
     if (!OpenConnct_IsDeviceID(inDeviceObjectID)) { return kAudioHardwareBadObjectError; }
 
-    Boolean isMic = (inDeviceObjectID == kObjectID_Device_Mic);
-    UInt64* anchor = isMic ? &gMicAnchorHostTime : &gSinkAnchorHostTime;
-    UInt64* count = isMic ? &gMicTimestampCount : &gSinkTimestampCount;
-
     Float64 ticksPerPeriod = gHostTicksPerFrame * (Float64)kRingFrames;
+    UInt64 anchor = gTimelineAnchorHostTime;
     UInt64 now = mach_absolute_time();
 
-    // Advance one whole period at a time so the reported pair stays exactly on the
-    // device's nominal grid; the HAL interpolates between them.
-    UInt64 nextPeriodHostTime = *anchor + (UInt64)(((Float64)(*count) + 1.0) * ticksPerPeriod);
-    if (now >= nextPeriodHostTime) {
-        ++(*count);
-    }
+    // Whole periods elapsed since the anchor, so the reported pair stays exactly on the
+    // nominal grid; the HAL interpolates between them.
+    UInt64 count = now > anchor ? (UInt64)((Float64)(now - anchor) / ticksPerPeriod) : 0;
 
-    *outSampleTime = (Float64)(*count) * (Float64)kRingFrames;
-    *outHostTime = *anchor + (UInt64)((Float64)(*count) * ticksPerPeriod);
+    *outSampleTime = (Float64)count * (Float64)kRingFrames;
+    *outHostTime = anchor + (UInt64)((Float64)count * ticksPerPeriod);
     *outSeed = 1;
 
     return noErr;

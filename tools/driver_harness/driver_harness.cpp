@@ -332,6 +332,34 @@ static bool check_io(Driver& d) {
     return ok;
 }
 
+// Mic and Sink share one ring indexed by sample time, so their timelines must share one
+// origin no matter when each device starts. Start the sink, let the mic join much later,
+// then compare where each timeline says sample 0 was (host time minus sample time).
+static bool check_shared_timeline(Driver& d) {
+    bool ok = true;
+    mach_timebase_info_data_t tb{};
+    mach_timebase_info(&tb);
+    const Float64 ticksPerFrame = (1e9 / 48000.0) * (Float64)tb.denom / (Float64)tb.numer;
+
+    OSStatus st = d.iface->StartIO(d.ref, kObjectID_Device_Sink, kClientID);
+    CHECK(st == noErr, "timeline: StartIO sink");
+    usleep(170000);
+    st = d.iface->StartIO(d.ref, kObjectID_Device_Mic, kClientID);
+    CHECK(st == noErr, "timeline: StartIO mic 170ms after sink");
+
+    Float64 ss = 0, ms = 0; UInt64 sh = 0, mh = 0, seed = 0;
+    d.iface->GetZeroTimeStamp(d.ref, kObjectID_Device_Sink, kClientID, &ss, &sh, &seed);
+    d.iface->GetZeroTimeStamp(d.ref, kObjectID_Device_Mic, kClientID, &ms, &mh, &seed);
+    const Float64 sinkOrigin = (Float64)sh - ss * ticksPerFrame;
+    const Float64 micOrigin = (Float64)mh - ms * ticksPerFrame;
+    const Float64 skewFrames = std::fabs(sinkOrigin - micOrigin) / ticksPerFrame;
+    CHECK(skewFrames < 1.0, "Mic and Sink timelines share one origin (skew %.1f frames)", skewFrames);
+
+    d.iface->StopIO(d.ref, kObjectID_Device_Mic, kClientID);
+    d.iface->StopIO(d.ref, kObjectID_Device_Sink, kClientID);
+    return ok;
+}
+
 int main(int argc, char** argv) {
     if (argc != 2) {
         std::fprintf(stderr, "usage: %s /path/to/OpenConnct.driver\n", argv[0]);
@@ -411,6 +439,7 @@ int main(int argc, char** argv) {
     CHECK(graphOK, "Object ownership graph has no dangling IDs");
 
     check_io(d);
+    check_shared_timeline(d);
 
     ULONG releaseAfterQI1 = d.iface->Release(d.ref);
     ULONG releaseAfterQI2 = d.iface->Release(d.ref);
