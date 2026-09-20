@@ -486,8 +486,14 @@ final class Capture {
     private var list: UnsafeMutableAudioBufferListPointer
     private let channels: Int
     var frames: [Float] = []
+    /// When each block was captured, on the machine's host clock: the index of its
+    /// first sample and the time of it. Lets two captures, started separately, be
+    /// compared on one timeline.
+    var chunks: [(first: Int, host: UInt64)] = []
+    let sampleRate: Double
 
     init(device: AudioObjectID, sampleRate: Double) throws {
+        self.sampleRate = sampleRate
         var desc = AudioComponentDescription(componentType: kAudioUnitType_Output,
                                              componentSubType: kAudioUnitSubType_HALOutput,
                                              componentManufacturer: kAudioUnitManufacturer_Apple,
@@ -543,6 +549,7 @@ final class Capture {
         guard AudioUnitRender(unit, flags, ts, bus, n, list.unsafeMutablePointer) == noErr else {
             return noErr
         }
+        if ts.pointee.mFlags.contains(.hostTimeValid) { chunks.append((frames.count, ts.pointee.mHostTime)) }
         // Appending to a Swift array on the IO thread would be forbidden in the
         // product. It is fine here: this is an offline capture tool, not the
         // realtime engine, and a complete recording beats purity. The capacity
@@ -565,6 +572,226 @@ final class Capture {
     func stop() { AudioOutputUnitStop(unit); AudioUnitUninitialize(unit) }
 }
 
+// MARK: - Latency
+//
+// How long the audio takes to get through OpenConnct.
+//
+// A short sweep is played from the speakers while the microphone is recorded
+// twice at once: directly, and through OpenConnct Mic. Both recordings carry the
+// time each block was captured on the host clock, so the moment the sweep shows
+// up in each can be found by matched filtering and compared. Everything the two
+// paths share (the speaker, the air, the microphone's own converter and USB
+// buffer) cancels out; what is left is what OpenConnct adds.
+//
+// `--control` records the microphone directly twice instead. That must come out
+// at about zero, and is how the method is checked against itself.
+
+func hostSeconds(_ ticks: UInt64) -> Double {
+    var tb = mach_timebase_info_data_t()
+    mach_timebase_info(&tb)
+    return Double(ticks) * Double(tb.numer) / Double(tb.denom) / 1e9
+}
+
+/// A 30 ms sweep from 1.5 to 7 kHz, windowed so it starts and ends smoothly.
+func sweep(sampleRate: Double) -> [Float] {
+    let n = Int(0.030 * sampleRate)
+    let f0 = 1500.0, f1 = 7000.0, t = 0.030
+    return (0..<n).map { i in
+        let x = Double(i) / sampleRate
+        let phase = 2 * Double.pi * (f0 * x + (f1 - f0) * x * x / (2 * t))
+        let window = 0.5 - 0.5 * cos(2 * Double.pi * Double(i) / Double(n - 1))
+        return Float(0.6 * window * sin(phase))
+    }
+}
+
+/// Plays the sweep `count` times, one every `period` seconds, through the default
+/// output, and notes when each one was handed to the device.
+final class SweepPlayer {
+    private var unit: AudioUnit!
+    private let reference: [Float]
+    private let firstFrame: Int
+    private let periodFrames: Int
+    private let count: Int
+    private let sampleRate: Double
+    private var frame = 0
+    /// Host time, in seconds, of the first sample of each sweep as it was
+    /// handed to the output device. The speaker's own latency comes on top and
+    /// is the same on every path, so it does not matter for a comparison.
+    private(set) var playedAt: [Double]
+
+    init(sampleRate: Double, count: Int, period: Double, delay: Double) throws {
+        self.sampleRate = sampleRate
+        self.count = count
+        reference = sweep(sampleRate: sampleRate)
+        firstFrame = Int(delay * sampleRate)
+        periodFrames = Int(period * sampleRate)
+        playedAt = Array(repeating: .nan, count: count)
+
+        var desc = AudioComponentDescription(componentType: kAudioUnitType_Output,
+                                             componentSubType: kAudioUnitSubType_DefaultOutput,
+                                             componentManufacturer: kAudioUnitManufacturer_Apple,
+                                             componentFlags: 0, componentFlagsMask: 0)
+        guard let comp = AudioComponentFindNext(nil, &desc) else { throw Err("no default output unit") }
+        var u: AudioUnit? = nil
+        guard AudioComponentInstanceNew(comp, &u) == noErr, let unit = u else { throw Err("cannot open the output") }
+        self.unit = unit
+        var asbd = AudioStreamBasicDescription(
+            mSampleRate: sampleRate, mFormatID: kAudioFormatLinearPCM,
+            mFormatFlags: kAudioFormatFlagIsFloat | kAudioFormatFlagIsPacked | kAudioFormatFlagIsNonInterleaved,
+            mBytesPerPacket: 4, mFramesPerPacket: 1, mBytesPerFrame: 4,
+            mChannelsPerFrame: 2, mBitsPerChannel: 32, mReserved: 0)
+        AudioUnitSetProperty(unit, kAudioUnitProperty_StreamFormat, kAudioUnitScope_Input, 0, &asbd,
+                             UInt32(MemoryLayout<AudioStreamBasicDescription>.size))
+        var cb = AURenderCallbackStruct(inputProc: { ctx, _, ts, _, n, io in
+            Unmanaged<SweepPlayer>.fromOpaque(ctx).takeUnretainedValue().render(ts, Int(n), io!)
+        }, inputProcRefCon: Unmanaged.passUnretained(self).toOpaque())
+        AudioUnitSetProperty(unit, kAudioUnitProperty_SetRenderCallback, kAudioUnitScope_Input, 0, &cb,
+                             UInt32(MemoryLayout<AURenderCallbackStruct>.size))
+        guard AudioUnitInitialize(unit) == noErr else { throw Err("AudioUnitInitialize failed (output)") }
+    }
+
+    private func render(_ ts: UnsafePointer<AudioTimeStamp>, _ n: Int, _ io: UnsafeMutablePointer<AudioBufferList>) -> OSStatus {
+        let buffers = UnsafeMutableAudioBufferListPointer(io)
+        let host = hostSeconds(ts.pointee.mHostTime)
+        for k in 0..<n {
+            let g = frame + k
+            var v: Float = 0
+            if g >= firstFrame {
+                let r = (g - firstFrame) % periodFrames
+                let idx = (g - firstFrame) / periodFrames
+                if idx < count && r < reference.count {
+                    v = reference[r]
+                    if r == 0 { playedAt[idx] = host + Double(k) / sampleRate }
+                }
+            }
+            for b in buffers { b.mData!.assumingMemoryBound(to: Float.self)[k] = v }
+        }
+        frame += n
+        return noErr
+    }
+
+    func start() { AudioOutputUnitStart(unit) }
+    func stop() { AudioOutputUnitStop(unit); AudioUnitUninitialize(unit) }
+}
+
+/// When sample `i` of a capture was taken, in host-clock seconds.
+func captureTime(_ c: Capture, sample i: Int) -> Double {
+    var lo = 0, hi = c.chunks.count - 1
+    while lo < hi { let mid = (lo + hi + 1) / 2; if c.chunks[mid].first <= i { lo = mid } else { hi = mid - 1 } }
+    let chunk = c.chunks[lo]
+    return hostSeconds(chunk.host) + Double(i - chunk.first) / c.sampleRate
+}
+
+/// Which sample of a capture was taken at host-clock time `t`.
+func captureIndex(_ c: Capture, at t: Double) -> Int {
+    var lo = 0, hi = c.chunks.count - 1
+    while lo < hi { let mid = (lo + hi + 1) / 2; if hostSeconds(c.chunks[mid].host) <= t { lo = mid } else { hi = mid - 1 } }
+    let chunk = c.chunks[lo]
+    return max(0, chunk.first + Int((t - hostSeconds(chunk.host)) * c.sampleRate))
+}
+
+/// The host time at which the sweep arrives in a capture, found by matched
+/// filtering within one second after `playedAt`. nil if it cannot be found
+/// clearly above the noise.
+func arrival(of reference: [Float], in c: Capture, after playedAt: Double) -> (time: Double, ratio: Float, index: Int)? {
+    let start = captureIndex(c, at: playedAt - 0.05)
+    let length = Int(1.0 * c.sampleRate)
+    guard start + length + reference.count < c.frames.count else { return nil }
+    var corr = [Float](repeating: 0, count: length)
+    c.frames.withUnsafeBufferPointer { signal in
+        reference.withUnsafeBufferPointer { filter in
+            vDSP_conv(signal.baseAddress! + start, 1, filter.baseAddress!, 1, &corr, 1,
+                      vDSP_Length(length), vDSP_Length(reference.count))
+        }
+    }
+    let magnitude = corr.map { abs($0) }
+    guard let peak = magnitude.enumerated().max(by: { $0.element < $1.element }) else { return nil }
+    let median = magnitude.sorted()[magnitude.count / 2]
+    let ratio = peak.element / max(median, 1e-9)
+    guard ratio > 6 else { return nil }
+    return (captureTime(c, sample: start + peak.offset), ratio, start + peak.offset)
+}
+
+func deviceProperty(_ id: AudioObjectID, _ selector: AudioObjectPropertySelector, input: Bool) -> UInt32 {
+    var a = AudioObjectPropertyAddress(mSelector: selector,
+                                       mScope: input ? kAudioDevicePropertyScopeInput : kAudioDevicePropertyScopeOutput,
+                                       mElement: kAudioObjectPropertyElementMain)
+    var v: UInt32 = 0, size = UInt32(4)
+    _ = AudioObjectGetPropertyData(id, &a, 0, nil, &size, &v)
+    return v
+}
+
+func describeLatency(_ label: String, _ id: AudioObjectID, input: Bool) {
+    let rate = Double(deviceProperty(id, kAudioDevicePropertyBufferFrameSize, input: input))
+    let lat = deviceProperty(id, kAudioDevicePropertyLatency, input: input)
+    let safety = deviceProperty(id, kAudioDevicePropertySafetyOffset, input: input)
+    print("  \(label.padding(toLength: 22, withPad: " ", startingAt: 0)) buffer \(Int(rate)) frames, device latency \(lat), safety offset \(safety)  (reported, in frames)")
+}
+
+func statistics(_ label: String, _ values: [Double]) {
+    guard !values.isEmpty else { print("  \(label): no click detected"); return }
+    let sorted = values.sorted()
+    let median = sorted[sorted.count / 2]
+    let mean = values.reduce(0, +) / Double(values.count)
+    let sd = (values.map { pow($0 - mean, 2) }.reduce(0, +) / Double(values.count)).squareRoot()
+    print(String(format: "  %@ median %.1f ms   min %.1f   max %.1f   spread (sd) %.1f   n=%d",
+                 label.padding(toLength: 34, withPad: " ", startingAt: 0), median, sorted.first!, sorted.last!, sd, values.count))
+}
+
+func runLatency(rawName: String, otherName: String, clicks: Int) throws {
+    func find(_ name: String) throws -> AudioObjectID {
+        guard let d = allDevices().first(where: { hasInput($0) && deviceName($0).localizedCaseInsensitiveContains(name) }) else {
+            throw Err("no input device matching \"\(name)\"; try `list`")
+        }
+        return d
+    }
+    let rawID = try find(rawName), otherID = try find(otherName)
+    print("Measuring  A: \(deviceName(rawID))   B: \(deviceName(otherID))")
+    describeLatency("A (\(deviceName(rawID)))", rawID, input: true)
+    describeLatency("B (\(deviceName(otherID)))", otherID, input: true)
+
+    let rate = 48000.0
+    let period = 1.5, delay = 1.5
+    let a = try Capture(device: rawID, sampleRate: rate)
+    let b = try Capture(device: otherID, sampleRate: rate)
+    let player = try SweepPlayer(sampleRate: rate, count: clicks, period: period, delay: delay)
+
+    a.start(); b.start()
+    Thread.sleep(forTimeInterval: 0.5)   // let both settle before anything is played
+    player.start()
+    Thread.sleep(forTimeInterval: delay + Double(clicks) * period + 1.0)
+    player.stop(); a.stop(); b.stop()
+
+    let reference = sweep(sampleRate: rate)
+    var toA: [Double] = [], toB: [Double] = [], added: [Double] = [], bySamples: [Double] = []
+    print("\n  click   A arrives   B arrives   B minus A   (ms after the sweep was handed to the speaker)")
+    for j in 0..<clicks {
+        let played = player.playedAt[j]
+        guard played.isFinite,
+              let ta = arrival(of: reference, in: a, after: played),
+              let tb = arrival(of: reference, in: b, after: played) else {
+            print("  \(j + 1)       not detected clearly in both recordings")
+            continue
+        }
+        toA.append((ta.time - played) * 1000); toB.append((tb.time - played) * 1000)
+        added.append((tb.time - ta.time) * 1000)
+        bySamples.append(Double(tb.index - ta.index) / rate * 1000)
+        print(String(format: "  %d       %7.1f     %7.1f     %7.1f      (signal/noise %.0f and %.0f)",
+                     j + 1, toA.last!, toB.last!, added.last!, ta.ratio, tb.ratio))
+    }
+    print("")
+    statistics("A, from speaker to recording", toA)
+    statistics("B, from speaker to recording", toB)
+    statistics("B minus A: what B adds", added)
+    // A second method that does not use the host timestamps at all: how many
+    // samples after A's did the sweep turn up in B's recording. Both recordings
+    // were started back to back, so this is only good to about one device buffer
+    // (11 ms), but it does not depend on the virtual device's clock model, so a
+    // large disagreement with the line above means the timestamps are not to be
+    // trusted.
+    statistics("same, by counting samples (+/- 11 ms)", bySamples)
+}
+
 // MARK: - CLI
 
 func usage() -> Never {
@@ -577,6 +804,11 @@ func usage() -> Never {
                                  [--hpf 75|150] [--gain <dB>]
       measure <file.wav> [more.wav ...]
       suite   <in.wav> <outdir>     render every stage separately and compare
+      latency [--raw <name>] [--other <name>] [--clicks <n>] [--control]
+                                    how long OpenConnct delays the audio: plays a sweep
+                                    and compares the microphone recorded directly (A,
+                                    default "NT-USB") with OpenConnct Mic (B). --control
+                                    records A twice instead, which must give about 0 ms.
     """)
     exit(2)
 }
@@ -604,6 +836,12 @@ do {
     case "list":
         for id in allDevices() where hasInput(id) { print("  \(id)  \(deviceName(id))") }
 
+    case "latency":
+        do {
+            let raw = value("raw") ?? "NT-USB"
+            try runLatency(rawName: raw, otherName: flag("control") ? raw : (value("other") ?? "OpenConnct"),
+                           clicks: Int(value("clicks") ?? "8") ?? 8)
+        } catch { print("error: \(error)"); exit(1) }
     case "capture":
         guard args.count >= 3, let seconds = Double(args[1]) else { usage() }
         let inputs = allDevices().filter { hasInput($0) }
