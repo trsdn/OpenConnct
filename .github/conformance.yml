@@ -41,7 +41,7 @@ criteria:
   B13: partial
   B14: pass
   B15: pass
-  B16: fail
+  B16: pass
   P01: pass
   P02: pass
   P03: pass
@@ -61,7 +61,7 @@ criteria:
   S06: pass
   S07: pass
   S08: pass
-  S09: fail
+  S09: pass
   S10: pass
   S11: pass
   S12: pass
