@@ -612,6 +612,9 @@ The C/C++ driver and DSP core are compiled by `clang`/`clang++` (bundled with Xc
 | `make embed-driver` | Copy driver bundle into `OpenConnct.app/Contents/Library/Audio/Plug-Ins/HAL/` |
 | `make embed-driver UNIVERSAL=1` | Universal build + embed driver |
 | `make test` | Run the DSP core test suite via `swift test` |
+| `make test-driver` | Run the plug-in against a fake host, no sudo needed |
+| `make test-all` | `make test` and `make test-driver` |
+| `make update-deps` | Resolve and build the in-app updater package |
 | `make run` | Build + launch `OpenConnct.app` |
 | `make install-driver` | Build, sign, sudo-install driver, restart CoreAudio |
 | `make uninstall-driver` | sudo-remove driver, restart CoreAudio |
@@ -637,12 +640,15 @@ The test suite (`Core/Tests/OpenConnctDSPTests/`) tests every module in `Core/So
 
 ### CI
 
-Every push and pull request runs two jobs (`.github/workflows/ci.yml`):
+Every push and pull request runs five jobs (`.github/workflows/ci.yml`):
 
 | Job | What it checks |
 |---|---|
-| `core` (Swift package) | `swift build` + `swift test` for the DSP core |
-| `build` (driver and app) | `make driver`, `make build UNIVERSAL=1`, `make embed-driver UNIVERSAL=1` |
+| Naming consistency | The old spelling of the name appears only where it is deliberately kept |
+| README badges | The README's platform badge agrees with the deployment target the app is built for |
+| OpenDeck plugin | `npm test` for the Stream Deck plugin, on Node 20 |
+| Swift package | `swift build` + `swift test` for the DSP core and the control logic |
+| Driver and app | `make driver`, `make test-driver`, `make build UNIVERSAL=1`, `make embed-driver UNIVERSAL=1` |
 
 Signing secrets are not present in CI, so the driver and app are built unsigned. This is sufficient to catch compile breaks.
 
@@ -710,10 +716,7 @@ cp .release.env.example .release.env
 
 Notarization is skipped automatically when neither `NOTARY_PROFILE` nor the three bare-credential variables are set. This means CI builds without secrets produce unsigned, unnotarized artifacts.
 
-### CI secrets (GitHub Actions)
-
-| Secret | Purpose |
-|---|---|
+---|---|
 | `MACOS_CERTIFICATE` | Base64-encoded `.p12` Developer ID certificate |
 | `MACOS_CERTIFICATE_PWD` | Password for the `.p12` |
 | `APPLE_ID` | Apple ID for notarization |
@@ -790,6 +793,10 @@ Known limitations of the app, stated so nobody has to discover them:
   slider in the microphone's detail view, which the keyboard can reach.
 - **Text does not follow the system text size.** Sizes are fixed points set in one place
   (`Theme.swift`), so Dynamic Type-style scaling has no effect.
+- **The level meters are not exposed to VoiceOver.** They are hidden from it, so the levels
+  can be seen but not heard.
+- **Resetting a fader to 0 dB is a double click.** There is no keyboard or VoiceOver
+  equivalent for the reset; setting the level by hand is.
 - **The interface is always dark**, whatever the system appearance.
 - **Numbers are formatted the same way everywhere** (decimal point, for example `-6.0 dB`),
   not according to the system locale.

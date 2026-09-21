@@ -21,7 +21,7 @@
 # record, then regenerate. Never the other way round.
 
 standard_version: "1.15.0"
-assessed_on: "2026-09-20"
+assessed_on: "2026-09-21"
 state: "Needs work"
 evidence: "docs/self-assessment.md"
 
@@ -34,13 +34,13 @@ criteria:
   B06: pass
   B07: pass
   B08: pass
-  B09: partial
+  B09: pass
   B10: pass
   B11: pass
   B12: pass
   B13: partial
-  B14: partial
-  B15: fail
+  B14: pass
+  B15: pass
   B16: fail
   P01: pass
   P02: pass
@@ -49,8 +49,8 @@ criteria:
   P05: partial
   P06: pass
   P07: pass
-  P08: fail
-  P09: fail
+  P08: pass
+  P09: pass
   P10: pass
   P11: pass
   S01: pass
@@ -60,7 +60,7 @@ criteria:
   S05: pass
   S06: pass
   S07: pass
-  S08: fail
+  S08: pass
   S09: fail
   S10: pass
   S11: pass
@@ -73,13 +73,13 @@ criteria:
   D05: na
   D06: na
   R01: partial
-  R02: fail
+  R02: pass
   R03: pass
   R04: pass
-  R05: fail
+  R05: pass
   R06: pass
   R07: pass
-  R08: partial
+  R08: pass
   I01: partial
   I02: fail
   I03: fail
@@ -107,10 +107,10 @@ criteria:
   G05: pass
   G06: pass
   G07: pass
-  G08: fail
-  L01: fail
+  G08: pass
+  L01: pass
   L02: pass
-  L03: fail
+  L03: pass
   L04: na
   L05: partial
   L06: na
@@ -119,7 +119,7 @@ criteria:
   X02: pass
   X03: partial
   X04: na
-  X05: fail
+  X05: pass
   Y01: partial
   Y02: pass
   Y03: pass

@@ -22,7 +22,7 @@ From the repository root:
 ```bash
 make test          # DSP primitives, offline, against known signals
 make test-driver   # plug-in property dispatch and ring buffer, no sudo needed
-make build         # universal app, signed if a Developer ID is present
+make build         # app for this Mac (add UNIVERSAL=1 for arm64 + x86_64), signed if a Developer ID is present
 ```
 
 `make test-driver` `dlopen`s the plug-in and exercises its vtable in-process, so
