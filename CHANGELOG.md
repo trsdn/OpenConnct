@@ -6,6 +6,13 @@ from the entry for the version being released.
 
 ## [Unreleased]
 
+### Added
+
+- **About OpenConnct** now links to the source code and the issue tracker, and the app
+  carries its repository and issue tracker URLs, licence identifier and copyright in
+  `Info.plist`, plus its own licence and the licences of the two bundled Swift packages
+  (AppUpdater, Version) in its resources.
+
 ## [0.5.0] - 2026-09-20
 
 ### Added

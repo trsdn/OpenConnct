@@ -108,5 +108,17 @@ jobs:
       - name: Build app (universal)
         run: make build UNIVERSAL=1
 
+      - name: App carries its identity and licence texts
+        run: |
+          app=dist/OpenConnct.app
+          for key in RepositoryURL IssueTrackerURL LicenseIdentifier NSHumanReadableCopyright; do
+            /usr/libexec/PlistBuddy -c "Print :$key" "$app/Contents/Info.plist" >/dev/null \
+              || { echo "::error::Info.plist has no $key"; exit 1; }
+          done
+          for file in LICENSE.txt THIRD-PARTY-LICENSES.txt; do
+            test -s "$app/Contents/Resources/$file" \
+              || { echo "::error::the app does not carry $file"; exit 1; }
+          done
+
       - name: Stage embedded driver
         run: make embed-driver UNIVERSAL=1

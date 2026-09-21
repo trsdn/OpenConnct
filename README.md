@@ -778,9 +778,10 @@ The app links two Swift packages statically, and both ship inside `OpenConnct.ap
 | [AppUpdater](https://github.com/mxcl/AppUpdater) 4.1.2 (Max Howell) | Unlicense (public domain) | in-app updates |
 | [Version](https://github.com/mxcl/Version) 2.2.1 (Max Howell) | Apache License 2.0 | comparing version numbers |
 
-Their licence texts live in their repositories and in `Update/.build/checkouts/` after
-a build. Apache 2.0 asks that its licence and notices travel with copies; the Version
-package has no `NOTICE` file. There is no other bundled third-party code. The OpenDeck
+Both licence texts are in `THIRD-PARTY-LICENSES.txt`, which is copied into the app's
+resources, together with OpenConnct's own `LICENSE.txt`, because Apache 2.0 and the MIT
+licence both ask that their text travel with copies. The Version package has no
+`NOTICE` file. There is no other bundled third-party code. The OpenDeck
 plugin and the driver use no packages, and the site loads nothing from other hosts.
 
 ## Accessibility

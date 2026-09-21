@@ -41,7 +41,8 @@ struct OpenConnctApp: App {
         .defaultSize(width: 640, height: 470)
         .windowResizability(.contentMinSize)
         .commands {
-            CommandGroup(after: .appInfo) {
+            CommandGroup(replacing: .appInfo) {
+                AboutCommand()
                 UpdateCommands(updates: updates)
             }
         }

@@ -24,6 +24,14 @@
 	<string>1</string>
 	<key>LSMinimumSystemVersion</key>
 	<string>13.0</string>
+	<key>NSHumanReadableCopyright</key>
+	<string>Copyright © 2025 Torsten Mahr. Released under the MIT licence.</string>
+	<key>LicenseIdentifier</key>
+	<string>MIT</string>
+	<key>RepositoryURL</key>
+	<string>https://github.com/trsdn/OpenConnct</string>
+	<key>IssueTrackerURL</key>
+	<string>https://github.com/trsdn/OpenConnct/issues</string>
 	<key>NSHighResolutionCapable</key>
 	<true/>
 	<key>NSMicrophoneUsageDescription</key>

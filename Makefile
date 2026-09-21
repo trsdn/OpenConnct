@@ -123,6 +123,11 @@ build: $(DSP_LIB) update-deps
 	@# interpreter rather than trusting a shebang line in a file on disk.
 	@cp $(APP_INSTALLER) $(APP_BUNDLE)/Contents/Resources/install-driver.sh
 	@chmod 644 $(APP_BUNDLE)/Contents/Resources/install-driver.sh
+	@# The MIT licence asks that its notice travel with copies, and Version's Apache
+	@# licence asks the same; both texts ship inside the app.
+	@cp LICENSE $(APP_BUNDLE)/Contents/Resources/LICENSE.txt
+	@cp THIRD-PARTY-LICENSES.txt $(APP_BUNDLE)/Contents/Resources/THIRD-PARTY-LICENSES.txt
+	@chmod 644 $(APP_BUNDLE)/Contents/Resources/LICENSE.txt $(APP_BUNDLE)/Contents/Resources/THIRD-PARTY-LICENSES.txt
 	@echo "Built $(APP_BUNDLE) [$(APP_ARCHS)]"
 	@$(MAKE) --no-print-directory sign-app
 
