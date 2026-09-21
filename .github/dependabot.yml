@@ -1,0 +1,10 @@
+# Keeps the pinned GitHub Actions current. AppUpdater is deliberately not here:
+# the notarization broker requires Update/Package.resolved to equal its own
+# reviewed copy, so a bump has to be made by hand together with a broker change
+# (README, "Dependency updates").
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly

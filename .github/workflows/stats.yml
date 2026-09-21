@@ -1,0 +1,28 @@
+name: Repository stats
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "23 5 * * *"
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/stats.yml
+
+# The card is committed to its own `stats` branch, so the scheduled commit never
+# reaches `main`.
+permissions:
+  contents: write
+
+jobs:
+  stats:
+    uses: trsdn/.github/.github/workflows/repo-stats.yml@main
+    with:
+      output-dir: .github/stats
+      branch: stats
+      theme: both
+      cards: repo-card
+      commit-message: "chore(stats): update repository stats"
+    secrets:
+      STATS_TOKEN: ${{ secrets.STATS_TOKEN }}

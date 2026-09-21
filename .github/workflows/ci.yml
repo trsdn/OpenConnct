@@ -43,6 +43,16 @@ jobs:
           done < <(git grep -lI "OpenConnect" || true)
           exit "$status"
 
+  readme-badges:
+    name: README badges
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Platform badge agrees with the deployment target
+        run: scripts/check_badges.sh
+
   opendeck-plugin:
     name: OpenDeck plugin
     runs-on: ubuntu-latest

@@ -1,10 +1,18 @@
 # OpenConnct
 
+[![License: MIT](https://img.shields.io/github/license/trsdn/OpenConnct)](LICENSE)
+[![macOS 13+](https://img.shields.io/badge/macOS-13%2B-blue)](#requirements)
+[![CI](https://github.com/trsdn/OpenConnct/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/trsdn/OpenConnct/actions/workflows/ci.yml)
+[![Latest release](https://img.shields.io/github/v/release/trsdn/OpenConnct)](https://github.com/trsdn/OpenConnct/releases/latest)
+[![Conformance](.github/badges/conformance.svg)](.github/conformance.yml)
+
 OpenConnct is a native macOS app for running several USB microphones at once: independent channel strips, a software mixer, a per-channel processing chain, and a virtual input device that Teams, Zoom, OBS and any other app can select.
 
 **What it is not.** There is no recording, no soundboard, no podcast or multitrack output, and no headphone monitoring. It is the mixing and processing stage only.
 
 **Why it exists.** Two USB microphones are two independent crystals, and neither of them is the clock the output device runs on. Software that ignores that drifts, and drift is audible — clicks, and eventually a dropout every few seconds. Handling it properly is the point of this project, so the correction loop is owned here rather than delegated (see [Architecture](#architecture)).
+
+**Language.** Primary language: English. The app, its documentation and this site are English only; there are no other locales.
 
 **Reference hardware.** Two USB condenser microphones running simultaneously as independent channels. Any USB audio interface CoreAudio can see will work.
 
@@ -18,8 +26,14 @@ OpenConnct is a native macOS app for running several USB microphones at once: in
 - [Architecture](#architecture)
 - [Building and testing](#building-and-testing)
 - [Releasing](#releasing)
+- [Verifying a download](#verifying-a-download)
+- [Versioning](#versioning)
+- [Dependency updates](#dependency-updates)
+- [Third-party code](#third-party-code)
+- [Accessibility](#accessibility)
 - [Troubleshooting](#troubleshooting)
 - [Status and roadmap](#status-and-roadmap)
+- [Repository stats](#repository-stats)
 
 ---
 
@@ -706,6 +720,81 @@ Notarization is skipped automatically when neither `NOTARY_PROFILE` nor the thre
 
 ---
 
+## Verifying a download
+
+Every release file has a `.sha256` next to it. `scripts/smoke_release.sh` does all of
+the following against the published release, without installing anything, and exits
+non-zero on the first thing that does not hold:
+
+```bash
+scripts/smoke_release.sh          # the latest release
+scripts/smoke_release.sh v0.5.0   # a specific one
+```
+
+It checks the checksum, that the updater's `OpenConnct-X.Y.Z.dmg` is byte-identical to
+the universal DMG, the stapled notarization ticket (`xcrun stapler validate`), the app's
+signature (`codesign --verify --deep --strict`), Gatekeeper's verdict
+(`spctl -a -t exec`, which must say *Notarized Developer ID*), that the app's version
+is the tag's, and that the embedded driver is signed by the same team as the app.
+
+What this shows is that Apple notarized exactly these bytes and that they were signed
+with the maintainer's Developer ID. It does not show that the source at the tag is free of
+defects, and it does not start the app: that needs a person to grant microphone access and
+to authorise the driver install. `provenance.json` in the release records which source
+commit the notarization broker built.
+
+Smoke test record (an agent ran it, not the maintainer):
+
+| Version | Date | Result |
+|---|---|---|
+| v0.5.0 | 2026-09-21 | pass, all seven checks |
+
+## Versioning
+
+OpenConnct uses [Semantic Versioning](https://semver.org/). While the major version is
+`0`, a minor release (`0.x.0`) may change behaviour, including the local API under `/v1`
+and the settings, and the [changelog](CHANGELOG.md) says so. A patch release (`0.x.y`)
+only fixes defects.
+
+## Dependency updates
+
+The maintainer owns dependency updates and reads the advisories for what the app links.
+The pinned GitHub Actions are kept current by Dependabot (`.github/dependabot.yml`).
+AppUpdater, the one Swift package the app links, is updated by hand: the notarization
+broker requires `Update/Package.resolved` to equal its own reviewed copy, so a bump is a
+deliberate change made together with the broker, not an automatic pull request.
+
+## Third-party code
+
+The app links two Swift packages statically, and both ship inside `OpenConnct.app`:
+
+| Package | Licence | Used for |
+|---|---|---|
+| [AppUpdater](https://github.com/mxcl/AppUpdater) 4.1.2 (Max Howell) | Unlicense (public domain) | in-app updates |
+| [Version](https://github.com/mxcl/Version) 2.2.1 (Max Howell) | Apache License 2.0 | comparing version numbers |
+
+Their licence texts live in their repositories and in `Update/.build/checkouts/` after
+a build. Apache 2.0 asks that its licence and notices travel with copies; the Version
+package has no `NOTICE` file. There is no other bundled third-party code. The OpenDeck
+plugin and the driver use no packages, and the site loads nothing from other hosts.
+
+## Accessibility
+
+Known limitations of the app, stated so nobody has to discover them:
+
+- **Faders are not keyboard-operable in the mixer.** Each channel's fader is a custom drag
+  control. VoiceOver can adjust it (it exposes a label, a value and an adjustable
+  action), but it takes no keyboard focus. The same level can be set with the standard
+  slider in the microphone's detail view, which the keyboard can reach.
+- **Text does not follow the system text size.** Sizes are fixed points set in one place
+  (`Theme.swift`), so Dynamic Type-style scaling has no effect.
+- **The interface is always dark**, whatever the system appearance.
+- **Numbers are formatted the same way everywhere** (decimal point, for example `-6.0 dB`),
+  not according to the system locale.
+
+Icon-only buttons carry labels for VoiceOver. This was checked by reading the source, not
+by testing with a screen reader.
+
 ## Troubleshooting
 
 ### "OpenConnct Mic" does not appear in System Settings → Sound → Input
@@ -796,6 +885,15 @@ On screen, a muted channel dims its four effect buttons and says so underneath: 
 - **Pad and high-pass on the microphone itself** are out of scope. Unlike gain (see *Gain* above, which now uses the microphone's own stage where one exists), these are not exposed through any public API. Reaching them would mean writing undocumented vendor-specific USB HID reports — a per-vendor reverse-engineering effort with a real risk of putting a device into an unknown state, for a feature the DSP already provides. In v1 and for the foreseeable future, pad and HPF are done in DSP.
 - **More than 8 simultaneous channels.** The current limit is `kMaxChannels = 8`, which is adequate for the reference hardware. Increasing it is a reallocation-only change.
 - **Per-source stereo panning and multi-bus routing.** "OpenConnct Mic" is a **stereo** device (2 channels, 48 kHz, Float32) because that is what conferencing and streaming apps expect. Both mics are mono sources, so the mix is summed and written identically to the left and right channels — a centre image on a stereo device. Panning individual mics, or exposing each mic as its own output bus, is not planned.
+
+---
+
+## Repository stats
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/trsdn/OpenConnct/stats/.github/stats/repo-card-dark.svg">
+  <img alt="Repository statistics" src="https://raw.githubusercontent.com/trsdn/OpenConnct/stats/.github/stats/repo-card.svg">
+</picture>
 
 ---
 

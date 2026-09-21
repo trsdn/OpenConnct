@@ -1,0 +1,13 @@
+# Repository configuration for the GitHub Copilot app.
+#
+# The authoritative instructions for this repository are in AGENTS.md. This file
+# points at them rather than restating them, so the two cannot drift apart.
+
+instructions: |
+  Read AGENTS.md in the repository root and follow it. It is the authoritative
+  guidance for this repository, including what an agent must never do: publish a
+  release, create or move tags, or change repository settings unless asked.
+
+scripts:
+  - name: Validate
+    command: make test-all
