@@ -12,6 +12,8 @@ OpenConnct is a native macOS app for running several USB microphones at once: in
 
 **Why it exists.** Two USB microphones are two independent crystals, and neither of them is the clock the output device runs on. Software that ignores that drifts, and drift is audible — clicks, and eventually a dropout every few seconds. Handling it properly is the point of this project, so the correction loop is owned here rather than delegated (see [Architecture](#architecture)).
 
+**Site.** <https://trsdn.github.io/OpenConnct/> is the project page, built from `site/` in this repository.
+
 **Language.** Primary language: English. The app, its documentation and this site are English only; there are no other locales.
 
 **Reference hardware.** Two USB condenser microphones running simultaneously as independent channels. Any USB audio interface CoreAudio can see will work.

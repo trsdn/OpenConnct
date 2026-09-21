@@ -11,6 +11,22 @@ version (`Contents/Info.plist` → `CFBundleShortVersionString`), and the smalle
 reproduction you can manage. You should get an acknowledgement within seven days
 and an assessment within thirty.
 
+## If a credential is exposed
+
+Who acts: the maintainer. What to do, per credential:
+
+- **Local API token** (`~/Library/Application Support/OpenConnct/api-token`): quit the
+  app, delete that file, start the app and switch the API on again. A new token is
+  created, and every script and Stream Deck profile must be given the new one. The old
+  one stops working immediately.
+- **Apple credentials used for notarization** (an app-specific password, the Developer ID
+  certificate): they live in the notarization broker, not in this repository. Revoke the
+  app-specific password at account.apple.com, or the certificate in the Apple Developer
+  account, then put the replacement into the broker's secrets. Releases signed with a
+  revoked certificate should be re-issued.
+- **A secret committed to this repository** by mistake: treat it as exposed, revoke it at
+  its issuer first, then remove it from the tree. Rewriting history does not un-expose it.
+
 ## What is in scope
 
 OpenConnct has a much larger blast radius than an ordinary desktop app, because
