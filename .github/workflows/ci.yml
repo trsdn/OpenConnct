@@ -13,7 +13,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       # The project was renamed from OpenConnect to OpenConnct (the original
       # name was already taken). These files intentionally still say
@@ -48,7 +48,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Platform badge agrees with the deployment target
         run: scripts/check_badges.sh
@@ -58,7 +58,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       # Node 20 is the oldest Stream Deck runs plugins with, so it is the
       # strictest place to test them.
@@ -76,7 +76,7 @@ jobs:
     runs-on: macos-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Build Core
         working-directory: Core
@@ -91,7 +91,7 @@ jobs:
     runs-on: macos-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       # Unsigned, so this needs no secrets. It exists to catch compile breaks in
       # the HAL plug-in and the app, which the Core package alone cannot.
