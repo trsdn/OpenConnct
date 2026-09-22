@@ -752,6 +752,7 @@ Smoke test record (an agent ran it, not the maintainer):
 
 | Version | Date | Result |
 |---|---|---|
+| v0.5.1 | 2026-09-22 | pass, all seven checks |
 | v0.5.0 | 2026-09-21 | pass, all seven checks |
 
 ## Versioning
