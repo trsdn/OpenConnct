@@ -20,8 +20,8 @@
 # The badge is generated from this file. Change the evidence first, then this
 # record, then regenerate. Never the other way round.
 
-standard_version: "1.15.0"
-assessed_on: "2026-09-21"
+standard_version: "1.20.0"
+assessed_on: "2026-09-22"
 state: "Needs work"
 evidence: "docs/self-assessment.md"
 
@@ -31,7 +31,7 @@ criteria:
   B03: pass
   B04: pass
   B05: pass
-  B06: pass
+  B06: partial
   B07: pass
   B08: pass
   B09: pass
@@ -46,13 +46,15 @@ criteria:
   P02: pass
   P03: pass
   P04: pass
-  P05: partial
+  P05: pass
   P06: pass
   P07: pass
   P08: pass
   P09: pass
   P10: pass
   P11: pass
+  P12: pass
+  P13: pass
   S01: pass
   S02: pass
   S03: partial
@@ -80,10 +82,11 @@ criteria:
   R06: pass
   R07: pass
   R08: pass
+  R09: pass
   I01: partial
   I02: fail
   I03: fail
-  I04: partial
+  I04: pass
   I05: pass
   I06: partial
   T01: na
@@ -98,14 +101,14 @@ criteria:
   W05: na
   W06: na
   W07: pass
-  W08: partial
+  W08: pass
   W09: pass
   G01: pass
   G02: pass
   G03: pass
   G04: pass
   G05: pass
-  G06: pass
+  G06: partial
   G07: pass
   G08: pass
   L01: pass
@@ -117,7 +120,7 @@ criteria:
   L07: partial
   X01: partial
   X02: pass
-  X03: partial
+  X03: fail
   X04: na
   X05: pass
   Y01: partial
