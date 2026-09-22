@@ -6,12 +6,33 @@ from the entry for the version being released.
 
 ## [Unreleased]
 
+## [0.5.1] - 2026-09-22
+
 ### Added
 
 - **About OpenConnct** now links to the source code and the issue tracker, and the app
   carries its repository and issue tracker URLs, licence identifier and copyright in
   `Info.plist`, plus its own licence and the licences of the two bundled Swift packages
   (AppUpdater, Version) in its resources.
+
+### Fixed
+
+Six accessibility and interaction defects, found by an Apple HIG review (one of them,
+the Light Mode one, confirmed against screenshots of the running app; see the closed
+issues for the rest):
+
+- The channel fader can now be reached and adjusted with the keyboard (Tab, then the
+  arrow keys), not only through VoiceOver.
+- Escape dismisses the gain-calibration and noise-floor measurement dialogs in every
+  phase.
+- The per-channel remove button is reachable by VoiceOver, not only on mouse hover.
+- Secondary text meets the 4.5:1 contrast minimum everywhere it appears (was 4.04:1 on
+  the lightest background); Solo and Mute's "silenced by another channel's solo" state
+  no longer rely on colour alone.
+- The main window follows the system's Dark/Light Mode setting instead of showing a
+  light title bar over unchanged dark content.
+- Decorative icons in the empty-microphone and permission-denied states are hidden
+  from VoiceOver.
 
 ## [0.5.0] - 2026-09-20
 
