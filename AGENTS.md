@@ -40,6 +40,15 @@ Generated, never hand-edit:
 - `_site/` — the built landing page, recreated by `scripts/build_site.sh`
 - `Core/.build/`, `Update/.build/`, `tools/*/build/` — SwiftPM/clang build caches, removed by `make clean`
 
+## For the Apple HIG reviewer
+
+Windowed app, one `WindowGroup` plus a `Settings` scene (`App/OpenConnctApp/App/OpenConnctApp.swift`);
+not a menu-bar app (`LSUIElement` is not set). User data it handles: microphone audio
+(processed in memory, never written to disk or sent anywhere), and, only when the
+local API is switched on, a bearer token file and loopback HTTP requests (see
+`README.md`, "Local API"). There is no screen-rendering command; review from source
+and say so.
+
 ## Setup
 
 ```sh

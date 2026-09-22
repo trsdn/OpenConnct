@@ -1,0 +1,7 @@
+name: openconnct
+version: 0.1.0
+targets:
+  - claude
+dependencies:
+  apm:
+    - trsdn/.github/packages/apple-hig-review#v1.20.0

@@ -1,0 +1,49 @@
+lockfile_version: '1'
+apm_version: 0.31.0
+dependencies:
+- repo_url: trsdn/.github
+  name: apple-hig-review
+  host: github.com
+  resolved_commit: f69f5cd73a2e7209fc47575802683f45e3b587c6
+  resolved_ref: v1.20.0
+  version: 1.0.1
+  virtual_path: packages/apple-hig-review
+  is_virtual: true
+  package_type: apm_package
+  deployed_files:
+  - .claude/agents/apple-hig-reviewer.md
+  - .claude/commands/apple-hig-review.md
+  - .claude/rules/apple-hig-review.md
+  deployed_file_hashes:
+    .claude/agents/apple-hig-reviewer.md: sha256:bca8ab2e8d101bf5e3ac7d5210888fe261fe41f31f1f701498a58a82e12fd131
+    .claude/commands/apple-hig-review.md: sha256:90a732403f105aef4306674e1864b4d3f3bd1e200cd1bedbc606e9dcbbaebcd0
+    .claude/rules/apple-hig-review.md: sha256:620c4216c1f1d3754528f93407c785aefdc6eed2b0c9c2eb5562bc71a9fe793d
+  content_hash: sha256:c0d9745e6e20d405f3d0043270c6e34d951c26131554d85f11bf3e02f5a39812
+deployments:
+- kind: project-relative
+  target: claude
+  value: .claude/agents/apple-hig-reviewer.md
+  runtime: null
+  scope: project
+  owners:
+  - trsdn/.github/packages/apple-hig-review
+  active_owner: trsdn/.github/packages/apple-hig-review
+  content_hash: sha256:bca8ab2e8d101bf5e3ac7d5210888fe261fe41f31f1f701498a58a82e12fd131
+- kind: project-relative
+  target: claude
+  value: .claude/commands/apple-hig-review.md
+  runtime: null
+  scope: project
+  owners:
+  - trsdn/.github/packages/apple-hig-review
+  active_owner: trsdn/.github/packages/apple-hig-review
+  content_hash: sha256:90a732403f105aef4306674e1864b4d3f3bd1e200cd1bedbc606e9dcbbaebcd0
+- kind: project-relative
+  target: claude
+  value: .claude/rules/apple-hig-review.md
+  runtime: null
+  scope: project
+  owners:
+  - trsdn/.github/packages/apple-hig-review
+  active_owner: trsdn/.github/packages/apple-hig-review
+  content_hash: sha256:620c4216c1f1d3754528f93407c785aefdc6eed2b0c9c2eb5562bc71a9fe793d
