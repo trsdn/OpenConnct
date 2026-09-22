@@ -14,6 +14,9 @@ private struct EmptyMicView: View {
             Image(systemName: "mic.slash")
                 .font(.system(size: 48))
                 .foregroundColor(Theme.textDisabled)
+                // Purely decorative: the text right below says the same thing,
+                // and VoiceOver reading the symbol name too is redundant.
+                .accessibilityHidden(true)
             Text(hasAvailableDevices ? "No inputs selected" : "No microphones connected")
                 .font(.system(size: 15, weight: .medium))
                 .foregroundColor(Theme.textSecondary)
@@ -41,6 +44,7 @@ private struct PermissionDeniedView: View {
             Image(systemName: "mic.slash.fill")
                 .font(.system(size: 48))
                 .foregroundColor(Theme.meterRed)
+                .accessibilityHidden(true)
             Text("Microphone Access Denied")
                 .font(.system(size: 15, weight: .semibold))
                 .foregroundColor(Theme.textPrimary)

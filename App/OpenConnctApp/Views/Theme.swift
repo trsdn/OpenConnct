@@ -11,7 +11,11 @@ enum Theme {
 
     // Text
     static let textPrimary   = Color.white
-    static let textSecondary = Color(white: 0.55)
+    // 0.62 rather than the 0.55 this used to be: against `raised`, the
+    // lightest background it sits on, 0.55 computes to 4.04:1 (WCAG), just
+    // under the 4.5:1 minimum for body-sized text. 0.62 clears it there
+    // (5.05:1) and comfortably clears it on `panel` and `bg` as well.
+    static let textSecondary = Color(white: 0.62)
     static let textDisabled  = Color(white: 0.30)
 
     // Accent (warm red)

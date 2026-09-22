@@ -126,8 +126,10 @@ struct GainCalibrationView: View {
             switch session.phase {
             case .settling, .silence:
                 Button("Cancel", action: onClose).buttonStyle(.bordered)
+                    .keyboardShortcut(.cancelAction)
             case .speech:
                 Button("Cancel", action: onClose).buttonStyle(.bordered)
+                    .keyboardShortcut(.cancelAction)
                 // The sentence takes about three seconds and the window allows
                 // five; without this the user reads it and then waits, which
                 // measures two seconds of them waiting.
@@ -135,7 +137,11 @@ struct GainCalibrationView: View {
                     .buttonStyle(.borderedProminent)
                     .tint(Theme.accent)
             case .finished, .failed:
+                // Escape dismisses the sheet in every phase, not just while a
+                // literal "Cancel" button is on screen — this is the only
+                // dismiss control left once the measurement has finished.
                 Button("Close", action: onClose).buttonStyle(.bordered)
+                    .keyboardShortcut(.cancelAction)
                 applyButton
             }
         }

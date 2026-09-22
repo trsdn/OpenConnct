@@ -136,6 +136,7 @@ private struct ActiveMeasurement: View {
                 dismiss()
             }
             .buttonStyle(.bordered)
+            .keyboardShortcut(.cancelAction)
         }
     }
 
@@ -157,7 +158,10 @@ private struct ActiveMeasurement: View {
                 }
                 HStack(spacing: 8) {
                     Spacer()
+                    // Escape dismisses regardless of phase, same reasoning as
+                    // GainCalibrationView's Close button.
                     Button("Close", action: dismiss).buttonStyle(.bordered)
+                        .keyboardShortcut(.cancelAction)
                     applyButton(result)
                 }
             }
@@ -187,6 +191,7 @@ private struct ActiveMeasurement: View {
             HStack {
                 Spacer()
                 Button("Close", action: dismiss).buttonStyle(.bordered)
+                    .keyboardShortcut(.cancelAction)
             }
         }
     }

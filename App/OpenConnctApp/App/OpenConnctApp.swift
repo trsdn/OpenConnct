@@ -33,6 +33,11 @@ struct OpenConnctApp: App {
                 .frame(
                     minWidth: 380, idealWidth: 640, maxWidth: .infinity,
                     minHeight: 430, idealHeight: 470, maxHeight: .infinity)
+                // The app draws its own dark interface; a light system setting
+                // would otherwise put grey text on a white title bar with dark
+                // content underneath it — the same reasoning SettingsView
+                // already applies this to.
+                .preferredColorScheme(.dark)
                 .onAppear(perform: startAudio)
         }
         // Without an explicit default the window is sized from the content's

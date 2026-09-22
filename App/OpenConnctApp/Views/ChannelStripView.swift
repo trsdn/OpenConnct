@@ -42,6 +42,15 @@ struct VerticalFader: View {
 
     @State private var dragStartNorm: Float? = nil
     @State private var dragStartY: CGFloat = 0
+    @FocusState private var isFocused: Bool
+
+    /// The one place the ±1 dB clamp is written, shared by the keyboard path
+    /// and the VoiceOver path below — two copies of this formula would only
+    /// ever be changed together, and one of them silently missed is a fader
+    /// whose keyboard and screen-reader steps disagree.
+    private func nudge(_ delta: Float) {
+        onChange(max(faderMin, min(faderMax, db + delta)))
+    }
 
     var body: some View {
         GeometryReader { geo in
@@ -81,6 +90,15 @@ struct VerticalFader: View {
                         RoundedRectangle(cornerRadius: Theme.radiusSmall)
                             .strokeBorder(Theme.accent, lineWidth: 1.5)
                     )
+                    // Visible focus ring for keyboard/Full Keyboard Access users —
+                    // drawn a touch outside the thumb's own border so it reads as a
+                    // ring around the control rather than a thicker version of it.
+                    .overlay(
+                        RoundedRectangle(cornerRadius: Theme.radiusSmall + 2)
+                            .strokeBorder(Theme.accent, lineWidth: 2)
+                            .padding(-3)
+                            .opacity(isFocused ? 1 : 0)
+                    )
                     .frame(width: 28, height: thumbH)
                     .offset(y: thumbY)
                     .frame(maxWidth: .infinity, alignment: .center)
@@ -103,13 +121,25 @@ struct VerticalFader: View {
                     )
             }
         }
+        // Keyboard path for sighted Full Keyboard Access users, independent of
+        // VoiceOver: Tab reaches the fader, the arrow keys nudge it by the same
+        // ±1 dB step accessibilityAdjustableAction already uses below.
+        .focusable()
+        .focused($isFocused)
+        .onMoveCommand { direction in
+            switch direction {
+            case .up: nudge(1)
+            case .down: nudge(-1)
+            default: break
+            }
+        }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Fader")
         .accessibilityValue(Text(formatDB(db, decimals: 1)))
         .accessibilityAdjustableAction { direction in
             switch direction {
-            case .increment: onChange(min(faderMax, db + 1))
-            case .decrement: onChange(max(faderMin, db - 1))
+            case .increment: nudge(1)
+            case .decrement: nudge(-1)
             @unknown default: break
             }
         }
@@ -126,8 +156,9 @@ private struct MuteButton: View {
     let action: () -> Void
 
     // Colour meaning:
-    //   Active mute  → accent red
-    //   Silenced but not by this button → dim amber
+    //   Active mute  → accent red, filled
+    //   Silenced but not by this button → dim amber, filled
+    //   Silenced only because another strip is soloed → dim amber, outlined
     //   Normal        → raised (off)
     //
     // A device muted on arrival takes the amber rather than the red, which is
@@ -135,14 +166,21 @@ private struct MuteButton: View {
     // somebody else's solo: the channel is quiet, and the user did not do it.
     // Reusing that colour rather than inventing a third means there is one thing
     // to learn instead of two.
+    //
+    // Filled vs. outlined is the shape cue colour alone used to be missing:
+    // "muted by you" (filled) and "silenced only because you soloed another
+    // channel" (outlined) used to render identically but for hue, which a
+    // colour-blind or Increase Contrast reading could not tell apart.
+    private var isSilencedByOtherSolo: Bool { effectivelyMuted && !muted }
+
     private var bgColor: Color {
         if muted { return automatic ? Theme.soloDim : Theme.accent }
-        if effectivelyMuted { return Theme.soloDim }
         return Theme.raised
     }
 
     private var fgColor: Color {
-        if muted || effectivelyMuted { return .white }
+        if muted { return .white }
+        if effectivelyMuted { return Theme.soloDim }
         return Theme.textSecondary
     }
 
@@ -152,7 +190,14 @@ private struct MuteButton: View {
                 .font(Theme.buttonIconFont)
                 .foregroundColor(fgColor)
                 .frame(width: 26, height: 22)
-                .background(RoundedRectangle(cornerRadius: Theme.radiusSmall).fill(bgColor))
+                .background(
+                    RoundedRectangle(cornerRadius: Theme.radiusSmall)
+                        .fill(bgColor)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: Theme.radiusSmall)
+                                .strokeBorder(Theme.soloDim, lineWidth: isSilencedByOtherSolo ? 1.5 : 0)
+                        )
+                )
         }
         .buttonStyle(.plain)
         .help(helpText)
@@ -215,6 +260,12 @@ private struct SoloButton: View {
                 .background(
                     RoundedRectangle(cornerRadius: Theme.radiusSmall)
                         .fill(soloed ? Theme.solo : Theme.raised)
+                        // The glyph never changes (see the comment below), so the
+                        // on-state needs a shape cue of its own alongside colour.
+                        .overlay(
+                            RoundedRectangle(cornerRadius: Theme.radiusSmall)
+                                .strokeBorder(Theme.textPrimary.opacity(0.6), lineWidth: soloed ? 1.5 : 0)
+                        )
                 )
         }
         .buttonStyle(.plain)
@@ -293,6 +344,13 @@ private struct RemoveChannelButton: View {
     let visible: Bool
     let action: () -> Void
 
+    // A VoiceOver user has no mouse to hover with, so `visible` alone left this
+    // button permanently out of the accessibility tree for them — the exact
+    // affordance a sighted mouse user gets on hover, VoiceOver never got at all.
+    @Environment(\.accessibilityVoiceOverEnabled) private var voiceOverEnabled
+
+    private var revealed: Bool { visible || voiceOverEnabled }
+
     var body: some View {
         Button(action: action) {
             Image(systemName: "xmark")
@@ -306,11 +364,11 @@ private struct RemoveChannelButton: View {
                 .contentShape(Circle())
         }
         .buttonStyle(.plain)
-        .opacity(visible ? 1 : 0)
-        .allowsHitTesting(visible)
+        .opacity(revealed ? 1 : 0)
+        .allowsHitTesting(revealed)
         .help("Remove this microphone from the mixer")
         .accessibilityLabel(Text("Remove microphone"))
-        .accessibilityHidden(!visible)
+        .accessibilityHidden(!revealed)
     }
 }
 
