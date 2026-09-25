@@ -6,6 +6,14 @@ from the entry for the version being released.
 
 ## [Unreleased]
 
+## [0.5.2] - 2026-09-25
+
+### Fixed
+
+- Keep CoreAudio input-device enumeration off the UI thread and skip virtual or
+  aggregate devices before querying their stream properties, so slow third-party
+  HAL plug-ins do not stall app startup or device changes.
+
 ## [0.5.1] - 2026-09-22
 
 ### Added

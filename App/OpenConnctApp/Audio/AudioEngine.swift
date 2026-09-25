@@ -38,6 +38,7 @@ final class AudioEngine {
 
     private var running = false
     private var sinkAvailable = false
+    private var deviceDiscoveryGeneration: UInt64 = 0
 
     private static let latencyProfileKey = "latencyProfile"
     /// Delay against crackle. Read at start-up, applied whenever channels are bound.
@@ -131,14 +132,26 @@ final class AudioEngine {
             self?.rebind(devices: devices)
         }
         deviceManager.startObserving()
-        rebind(devices: deviceManager.currentInputDevices())
+        refreshDevices()
     }
 
     func stop() {
+        deviceDiscoveryGeneration &+= 1
+        deviceManager.onChange = nil
         deviceManager.stopObserving()
         teardownInputs()
         teardownOutput()
         running = false
+    }
+
+    private func refreshDevices() {
+        deviceDiscoveryGeneration &+= 1
+        let generation = deviceDiscoveryGeneration
+        Task { @MainActor [weak self] in
+            let devices = await AudioDeviceManager.currentInputDevices()
+            guard let self, self.deviceDiscoveryGeneration == generation else { return }
+            self.rebind(devices: devices)
+        }
     }
 
     /// Requests microphone access, then starts. Completion reports whether the

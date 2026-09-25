@@ -10,7 +10,7 @@ enum OCDriver {
 }
 
 /// A hardware input device the user can use as a channel.
-struct AudioInputDevice: Equatable, Identifiable {
+struct AudioInputDevice: Equatable, Identifiable, Sendable {
     var objectID: AudioObjectID
     var uid: String
     var name: String
@@ -58,6 +58,9 @@ struct AudioInputDevice: Equatable, Identifiable {
 /// manager only reports the new device list, and the engine reconciles it by
 /// rebuilding the affected channel and nothing else.
 final class AudioDeviceManager {
+    private static let enumerationQueue = DispatchQueue(
+        label: "audio.openconnct.device-enumeration", qos: .userInitiated)
+
     /// Called on the main queue whenever the set of input devices changes.
     var onChange: (([AudioInputDevice]) -> Void)?
 
@@ -66,17 +69,18 @@ final class AudioDeviceManager {
 
     // MARK: - Enumeration
 
-    func currentInputDevices() -> [AudioInputDevice] {
+    /// CoreAudio may synchronously wait on third-party HAL plug-ins, so device
+    /// enumeration runs off the main thread.
+    static func currentInputDevices() async -> [AudioInputDevice] {
+        await withCheckedContinuation { continuation in
+            enumerationQueue.async {
+                continuation.resume(returning: enumerateInputDevices())
+            }
+        }
+    }
+
+    private static func enumerateInputDevices() -> [AudioInputDevice] {
         allDeviceIDs().compactMap { describe($0) }
-            .filter { $0.inputChannels > 0 }
-            // Never offer our own virtual devices as a capture source.
-            .filter { $0.uid != OCDriver.micUID && $0.uid != OCDriver.sinkUID }
-            // Nor anyone else's. On a real machine the input list is full of
-            // loopback drivers (other conferencing apps, capture utilities,
-            // other audio applications). Binding those would mix unrelated app audio
-            // into the output and, with two such drivers installed, can form a
-            // loop. Only real hardware is a microphone.
-            .filter(\.isPhysicalInput)
     }
 
     /// Resolve the sink by UID translation rather than by scanning the device
@@ -111,7 +115,7 @@ final class AudioDeviceManager {
         return device
     }
 
-    private func allDeviceIDs() -> [AudioObjectID] {
+    private static func allDeviceIDs() -> [AudioObjectID] {
         var address = AudioObjectPropertyAddress(
             mSelector: kAudioHardwarePropertyDevices,
             mScope: kAudioObjectPropertyScopeGlobal,
@@ -135,16 +139,26 @@ final class AudioDeviceManager {
         return ids
     }
 
-    private func describe(_ id: AudioObjectID) -> AudioInputDevice? {
+    private static func describe(_ id: AudioObjectID) -> AudioInputDevice? {
         guard let uid = uid(of: id) else { return nil }
-        let name = self.name(of: id) ?? uid
+        guard uid != OCDriver.micUID && uid != OCDriver.sinkUID else { return nil }
+
+        let transportType = transportType(of: id)
+        // Avoid asking virtual and aggregate drivers for properties the mixer
+        // never uses; third-party HAL plug-ins can be slow or unhealthy.
+        guard !AudioInputDevice.softwareTransports.contains(transportType) else { return nil }
+
+        let inputChannels = inputChannelCount(of: id)
+        guard inputChannels > 0 else { return nil }
+
+        let name = name(of: id) ?? uid
         return AudioInputDevice(
             objectID: id,
             uid: uid,
             name: name,
-            inputChannels: inputChannelCount(of: id),
+            inputChannels: inputChannels,
             nominalSampleRate: sampleRate(of: id),
-            transportType: transportType(of: id),
+            transportType: transportType,
             usbIdentity: modelUID(of: id).flatMap {
                 USBDeviceIdentity.parse(uid: uid, modelUID: $0)
             })
@@ -153,7 +167,7 @@ final class AudioDeviceManager {
     /// `kAudioDevicePropertyTransportType`, e.g. `usb `, `bltn`, `virt`.
     /// Unknown is reported as 0 and is deliberately *not* treated as software:
     /// some legitimate hardware drivers leave it unset.
-    func transportType(of id: AudioObjectID) -> UInt32 {
+    private static func transportType(of id: AudioObjectID) -> UInt32 {
         var address = AudioObjectPropertyAddress(
             mSelector: kAudioDevicePropertyTransportType,
             mScope: kAudioObjectPropertyScopeGlobal,
@@ -168,7 +182,7 @@ final class AudioDeviceManager {
 
     // MARK: - Individual properties
 
-    private func stringProperty(_ id: AudioObjectID, _ selector: AudioObjectPropertySelector) -> String? {
+    private static func stringProperty(_ id: AudioObjectID, _ selector: AudioObjectPropertySelector) -> String? {
         var address = AudioObjectPropertyAddress(
             mSelector: selector,
             mScope: kAudioObjectPropertyScopeGlobal,
@@ -182,21 +196,21 @@ final class AudioDeviceManager {
         return value as String
     }
 
-    func uid(of id: AudioObjectID) -> String? {
+    private static func uid(of id: AudioObjectID) -> String? {
         stringProperty(id, kAudioDevicePropertyDeviceUID)
     }
 
-    func name(of id: AudioObjectID) -> String? {
+    private static func name(of id: AudioObjectID) -> String? {
         stringProperty(id, kAudioObjectPropertyName)
     }
 
     /// Identifies the *model* rather than the individual device, and on USB
     /// hardware ends in the vendor and product identifiers.
-    func modelUID(of id: AudioObjectID) -> String? {
+    private static func modelUID(of id: AudioObjectID) -> String? {
         stringProperty(id, kAudioDevicePropertyModelUID)
     }
 
-    func sampleRate(of id: AudioObjectID) -> Double {
+    private static func sampleRate(of id: AudioObjectID) -> Double {
         var address = AudioObjectPropertyAddress(
             mSelector: kAudioDevicePropertyNominalSampleRate,
             mScope: kAudioObjectPropertyScopeGlobal,
@@ -210,7 +224,7 @@ final class AudioDeviceManager {
     }
 
     /// Total input channels across all input streams of the device.
-    func inputChannelCount(of id: AudioObjectID) -> Int {
+    private static func inputChannelCount(of id: AudioObjectID) -> Int {
         var address = AudioObjectPropertyAddress(
             mSelector: kAudioDevicePropertyStreamConfiguration,
             mScope: kAudioObjectPropertyScopeInput,
@@ -262,8 +276,12 @@ final class AudioDeviceManager {
             guard let self else { return }
             // Devices frequently appear before their streams are fully
             // described, so settle briefly before reconciling.
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
-                self.onChange?(self.currentInputDevices())
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { [weak self] in
+                guard let self else { return }
+                Task { @MainActor in
+                    let devices = await Self.currentInputDevices()
+                    self.onChange?(devices)
+                }
             }
         }
         listenerBlock = block
